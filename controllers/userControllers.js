@@ -3,7 +3,8 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const otpGenerator = require("../utils/otpGenerator");
 const {sendEmail} = require("../utils/sendEmail")
-const{sendSms} = require("../utils/sendSms")
+const{sendSms} = require("../utils/sendSms");
+const { PricingV2VoiceVoiceNumberInboundCallPrice } = require("twilio/lib/rest/pricing/v2/voice/number");
   
 // Register user with validations, OTP generation and notifications
 exports.registerUser = async (req, res) => {
@@ -15,26 +16,43 @@ exports.registerUser = async (req, res) => {
     const { name, email, phone, password } = req.body;
 
     if (!name || !email || !phone || !password) {
-      return res.status(400).json({ message: "All fields are required" });
+      return res.status(400).json({ message: "All fields are required",
+        messageType:"failure",
+           userId: null,
+       });
     }
 
     if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: "Invalid email format" });
+      return res.status(400).json({ message: "Invalid email format" ,
+        messageType:"failure",
+           userId: null,
+      });
     }
 
     if (!phoneRegex.test(phone)) {
-      return res.status(400).json({ message: "Invalid phone number format. Use country code (+91)" });
+      return res.status(400).json({ message: "Invalid phone number format. Use country code (+91)" 
+
+        ,
+        messageType:"failure",
+           userId: null,
+      });
     }
 
     if (!passwordRegex.test(password)) {
       return res.status(400).json({
         message: "Password must be at least 8 characters long, include an uppercase letter, a number, and a special character.",
+        messageType:"failure",
+        userId:null
       });
     }
 
     const existingUser = await User.findOne({ $or: [{ email }, { phone }] });
     if (existingUser) {
-      return res.status(400).json({ message: "Email or phone number already registered" });
+      return res.status(400).json({ message: "Email or phone number already registered",
+
+        messageType:"failure",
+           userId: null,
+       });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -62,11 +80,15 @@ exports.registerUser = async (req, res) => {
 
     res.status(201).json({
       message: "User registered successfully",
+      messageType:"success",
       userId: newUser._id,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error",
+      messageType:"failure",
+      userId:null
+     });
   }
 };
 // Verify OTPs for both email and phone
@@ -117,17 +139,29 @@ exports.loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required" });
+      return res.status(400).json({ message: "Email and password are required",
+
+        messageType:"failure",
+           userId: null
+       });
     }
 
     const userExist = await User.findOne({ email });
     if (!userExist) {
-      return res.status(400).json({ message: "User not found" });
+      return res.status(400).json({ message: "User not found" ,
+        
+        messageType:"failure",
+           userId: null
+      });
     }
 
     const isMatch = await bcrypt.compare(password, userExist.password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ message: "Invalid credentials" ,
+          
+        messageType:"failure",
+           userId: null
+      });
     }
 
     const token = jwt.sign(
@@ -146,13 +180,16 @@ exports.loginUser = async (req, res) => {
 
     res.json({
       message: "Logged in successfully",
-      token,
-      user,
+       messageType:"failure",
+           userId:  user._id,
+
     });
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error",
+         messageType:"failure",
+     });
   }
 };
 
