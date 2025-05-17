@@ -95,7 +95,7 @@ exports.registerUser = async (req, res) => {
     console.error(error);
     res
       .status(500)
-      .json({ message: "Server error", messageType: "failure", userId: "" });
+      .json({ message: "Server error", messageType: "failure", userId: "" ,error: error.message });
   }
 };
 // Verify OTPs for both email and phone
