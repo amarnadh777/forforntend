@@ -13,8 +13,8 @@ router.post("/address",addAddress)
 router.put("/address/:addressId",updateAddressById)
 router.delete("/delete/:addressId ",deleteAddressById)
 
-router.post("/forgot-password",verifyToken,forgotPassword)
-router.post("/reset-password",verifyToken,resetPassword)
+router.post("/forgot-password",forgotPassword)
+router.post("/reset-password",resetPassword)
 
 
 
