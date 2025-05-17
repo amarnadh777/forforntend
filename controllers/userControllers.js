@@ -385,14 +385,6 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    // Validate that the logged-in user's id matches the requested email's user id
-    if (user._id.toString() !== req.user.userId) {
-      return res.status(403).json({
-        message: "Unauthorized password reset attempt.",
-        messageType: "failure",
-      });
-    }
-
     // Generate a 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
