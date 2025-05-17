@@ -401,6 +401,8 @@ exports.forgotPassword = async (req, res) => {
       `Your OTP for password reset is: ${otp}. It will expire in 5 minutes.`
     );
 
+
+  console.log("Email sent:", emailResult);
     // Check if email was successfully sent
     if (!emailResult.accepted || !emailResult.accepted.length) {
       return res.status(500).json({
