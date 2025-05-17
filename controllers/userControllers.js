@@ -428,15 +428,16 @@ exports.forgotPassword = async (req, res) => {
 
 
 
+const bcrypt = require("bcrypt");
+
 exports.resetPassword = async (req, res) => {
   try {
-   
-    const { newPassword , otp} = req.body;
+    const { newPassword, otp, email } = req.body;
 
-    // Validate newPassword is provided
-    if (!newPassword || !otp) {
+    // Validate required fields
+    if (!newPassword || !otp || !email) {
       return res.status(400).json({
-        message: "New password or otp  is required.",
+        message: "Email, OTP, and new password are required.",
         messageType: "failure",
       });
     }
@@ -451,20 +452,21 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
-    // Find user by OTP and check if it's not expired
+    // Find user by email and OTP, and check if OTP is still valid
     const user = await User.findOne({
+      email,
       resetPasswordToken: otp,
       resetPasswordExpires: { $gt: Date.now() },
     });
 
     if (!user) {
       return res.status(400).json({
-        message: "Invalid or expired OTP.",
+        message: "Invalid, expired OTP or email mismatch.",
         messageType: "failure",
       });
     }
 
-    // Hash and update password
+    // Hash and update the new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword;
 
