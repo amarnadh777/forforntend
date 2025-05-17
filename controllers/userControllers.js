@@ -4,9 +4,6 @@ const jwt = require("jsonwebtoken");
 const otpGenerator = require("../utils/otpGenerator");
 const { sendEmail } = require("../utils/sendEmail");
 const { sendSms } = require("../utils/sendSms");
-const {
-  PricingV2VoiceVoiceNumberInboundCallPrice,
-} = require("twilio/lib/rest/pricing/v2/voice/number");
 
 // Register user with validations, OTP generation and notifications
 exports.registerUser = async (req, res) => {
@@ -365,67 +362,136 @@ exports.resendOtp = async (req, res) => {
   }
 };
 
+
+
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
+    // Validate email is provided
+    if (!email) {
+      return res.status(400).json({
+        message: "Email is required.",
+        messageType: "failure",
+      });
+    }
+
     // Find user by email
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(404).json({ message: "No user with that email" });
+      return res.status(404).json({
+        message: "No user with that email.",
+        messageType: "failure",
+      });
     }
 
-    // Generate token (random hex string)
-    const resetToken = crypto.randomBytes(20).toString("hex");
+    // Validate that the logged-in user's id matches the requested email's user id
+    if (user._id.toString() !== req.user.userId) {
+      return res.status(403).json({
+        message: "Unauthorized password reset attempt.",
+        messageType: "failure",
+      });
+    }
 
-    // Set token and expiry (1 hour from now)
-    user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = Date.now() + 3600000;
+    // Generate a 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Set OTP and expiry (5 mins)
+    user.resetPasswordToken = otp;
+    user.resetPasswordExpires = Date.now() + 5 * 60 * 1000;
 
     await user.save();
 
-    // Construct reset URL for user - adjust your frontend URL here
-    const resetUrl = `http://localhost:5000/reset-password/${resetToken}`;
+    // Send email with OTP
+    const emailResult = await sendEmail(
+      user.email,
+      "Your Password Reset OTP",
+      `Your OTP for password reset is: ${otp}. It will expire in 5 minutes.`
+    );
 
-    // Send email (implement sendEmail yourself or use nodemailer)
-    await sendEmail({
-      to: user.email,
-      subject: "Password Reset Request",
-      text: `You requested a password reset. Click here to reset: ${resetUrl}`,
+    // Check if email was successfully sent
+    if (!emailResult.accepted || !emailResult.accepted.length) {
+      return res.status(500).json({
+        message: "Failed to deliver OTP email.",
+        messageType: "failure",
+      });
+    }
+
+    // Success Response
+    res.status(200).json({
+      message: "OTP sent to your email.",
+      messageType: "success",
+      userId: user._id,
     });
 
-    res.json({ message: "Password reset email sent" });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error("Forgot password error:", error);
+    res.status(500).json({
+      message: "Server error.",
+      messageType: "failure",
+    });
   }
 };
 
+
+
+
 exports.resetPassword = async (req, res) => {
   try {
-    const { token } = req.params;
-    const { newPassword } = req.body;
+   
+    const { newPassword , otp} = req.body;
 
-    // Find user by token and check if token is not expired
+    // Validate newPassword is provided
+    if (!newPassword || !otp) {
+      return res.status(400).json({
+        message: "New password or otp  is required.",
+        messageType: "failure",
+      });
+    }
+
+    // Password strength validation
+    const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      return res.status(400).json({
+        message:
+          "Password must be at least 8 characters long, include an uppercase letter, a number, and a special character.",
+        messageType: "failure",
+      });
+    }
+
+    // Find user by OTP and check if it's not expired
     const user = await User.findOne({
-      resetPasswordToken: token,
+      resetPasswordToken: otp,
       resetPasswordExpires: { $gt: Date.now() },
     });
 
     if (!user) {
-      return res.status(400).json({ message: "Invalid or expired token" });
+      return res.status(400).json({
+        message: "Invalid or expired OTP.",
+        messageType: "failure",
+      });
     }
 
-    // Update user password and clear reset token fields
-    user.password = newPassword; // hash password as per your setup
+    // Hash and update password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+
+    // Clear OTP fields
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
 
     await user.save();
 
-    res.json({ message: "Password reset successful" });
+    res.status(200).json({
+      message: "Password reset successful.",
+      messageType: "success",
+    });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error("Reset password error:", error);
+    res.status(500).json({
+      message: "Server error.",
+      messageType: "failure",
+    });
   }
 };
