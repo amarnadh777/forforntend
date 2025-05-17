@@ -428,7 +428,7 @@ exports.forgotPassword = async (req, res) => {
 
 
 
-const bcrypt = require("bcrypt");
+
 
 exports.resetPassword = async (req, res) => {
   try {
