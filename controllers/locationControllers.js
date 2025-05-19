@@ -47,7 +47,7 @@ exports.getNearbyRestaurants = async (req, res) => {
         },
       },
       active: true, // optionally filter only active restaurants
-    });
+    }).select("name address openingHours minOrderAmount foodType phone rating images location");;
 
     res.status(200).json({
       message: "Nearby restaurants fetched successfully.",

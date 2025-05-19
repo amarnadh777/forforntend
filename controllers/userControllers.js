@@ -385,8 +385,7 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    // Generate a 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+ const otp = Math.floor(10000 + Math.random() * 90000).toString();
 
     // Set OTP, expiry (5 mins), and reset otpVerified flag
     user.resetPasswordToken = otp;
