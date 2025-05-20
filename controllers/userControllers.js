@@ -384,8 +384,9 @@ exports.forgotPassword = async (req, res) => {
         messageType: "failure",
       });
     }
-
+ 
  const otp = Math.floor(10000 + Math.random() * 90000).toString();
+ 
 
     // Set OTP, expiry (5 mins), and reset otpVerified flag
     user.resetPasswordToken = otp;
@@ -527,6 +528,132 @@ exports.resetPassword = async (req, res) => {
     console.error("Reset password error:", error);
     res.status(500).json({
       message: "Server error.",
+      messageType: "failure",
+    });
+  }
+};
+
+
+exports.sendLoginOtp = async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({
+        message: "Phone number is required",
+        messageType: "failure",
+      });
+    }
+
+    // Check if user exists
+    const user = await User.findOne({ phone });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "Phone number not registered",
+        messageType: "failure",
+      });
+    }
+
+    // Generate 5-digit OTP
+    const otp = Math.floor(10000 + Math.random() * 90000).toString();
+
+    // Set expiry 5 mins from now
+    const expiry = new Date(Date.now() + 5 * 60 * 1000);
+
+    // Save OTP and expiry as loginOtp
+    user.loginOtp = otp;
+    user.loginOtpExpiresAt = expiry;
+    await user.save();
+
+    // Try to send SMS
+    try {
+      await sendSms(phone, `Your OTP is ${otp}`);
+      // SMS sent successfully
+      return res.status(200).json({
+        message: "OTP sent successfully",
+        messageType: "success",
+      });
+    } catch (smsError) {
+      console.error("SMS sending failed:", smsError);
+      // Fallback: OTP not sent by SMS but still return success with warning
+      return res.status(200).json({
+        message:
+          "OTP generated successfully but failed to send SMS. Please try again or contact support.",
+        messageType: "failure",
+      });
+    }
+  } catch (error) {
+    console.error("Error in sendLoginOtp:", error);
+    res.status(500).json({
+      message: "Server Error",
+      messageType: "failure",
+    });
+  }
+};
+
+
+
+exports.verifyLoginOtp = async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+
+    if (!phone || !otp) {
+      return res.status(400).json({
+        message: "Phone number and OTP are required",
+        messageType: "failure",
+      });
+    }
+
+    const user = await User.findOne({ phone });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+        messageType: "failure",
+      });
+    }
+
+    if (
+      user.loginOtp !== otp ||
+      !user.loginOtpExpiresAt ||
+      user.loginOtpExpiresAt < new Date()
+    ) {
+      return res.status(400).json({
+        message: "Invalid or expired OTP",
+        messageType: "failure",
+      });
+    }
+
+    // Clear OTP fields after successful verification
+    user.loginOtp = null;
+    user.loginOtpExpiresAt = null;
+    await user.save();
+
+    // Generate JWT token
+    const payload = {
+      userId: user._id,
+      phone: user.phone,
+    };
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: "7d", // token valid for 7 days, change as needed
+    });
+
+    return res.status(200).json({
+      message: "OTP verified successfully",
+      messageType: "success",
+      token, // send token to client
+      user: {
+        id: user._id,
+        phone: user.phone,
+        // you can add other user info here if needed
+      },
+    });
+  } catch (error) {
+    console.error("Error in verifyLoginOtp:", error);
+    return res.status(500).json({
+      message: "Server error",
       messageType: "failure",
     });
   }

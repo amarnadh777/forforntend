@@ -40,6 +40,7 @@ app.use("/user", userRouter);
 app.use("/restaurants", productRouter);
 app.use("/restaurants", resturantRouter);
 app.use("/restaurants", offerRouter);
+
 app.use("/order", orderRouter);
 app.use("/coupon", couponRoutes);
 app.use("/location", locationRouter);

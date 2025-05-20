@@ -31,7 +31,7 @@ const userSchema = new mongoose.Schema(
     },
     active: { type: Boolean, default: true },
     profilePicture: { type: String },
-
+    
     verification: {
       phoneOtp: String,
       emailOtp: String,
@@ -39,6 +39,12 @@ const userSchema = new mongoose.Schema(
       emailVerified: { type: Boolean, default: false },
       phoneVerified: { type: Boolean, default: false },
     },
+     loginOtp: {
+    type: String,
+  },
+  loginOtpExpiresAt: {
+    type: Date,
+  },
 
     bankDetails: {
       accountNumber: String,
