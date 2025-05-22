@@ -640,15 +640,13 @@ exports.verifyLoginOtp = async (req, res) => {
       expiresIn: "7d", // token valid for 7 days, change as needed
     });
 
+
+
     return res.status(200).json({
-      message: "OTP verified successfully",
+      message: "Logged in successfull with phone number",
       messageType: "success",
-      token, // send token to client
-      user: {
-        id: user._id,
-        phone: user.phone,
-        // you can add other user info here if needed
-      },
+      token:token, // send token to client
+      userId: user._id,
     });
   } catch (error) {
     console.error("Error in verifyLoginOtp:", error);
