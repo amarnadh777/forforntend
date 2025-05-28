@@ -9,7 +9,7 @@ exports.getNearbyRestaurants = async (req, res) => {
     if (latitude === undefined || longitude === undefined) {
       return res.status(400).json({
         message: "Latitude and longitude are required in query parameters.",
-        messageType: "error",
+        messageType: "failure",
         statusCode: 400
       });
     }
@@ -21,7 +21,7 @@ exports.getNearbyRestaurants = async (req, res) => {
     if (isNaN(lat) || lat < -90 || lat > 90) {
       return res.status(400).json({
         message: "Invalid latitude. Must be a number between -90 and 90.",
-        messageType: "error",
+        messageType: "failure",
         statusCode: 400
       });
     }
@@ -29,7 +29,7 @@ exports.getNearbyRestaurants = async (req, res) => {
     if (isNaN(lng) || lng < -180 || lng > 180) {
       return res.status(400).json({
         message: "Invalid longitude. Must be a number between -180 and 180.",
-        messageType: "error",
+        messageType: "failure",
         statusCode: 400
       });
     }
@@ -37,7 +37,7 @@ exports.getNearbyRestaurants = async (req, res) => {
     if (isNaN(dist) || dist <= 0) {
       return res.status(400).json({
         message: "Distance must be a positive number (in meters).",
-        messageType: "error",
+        messageType: "failure",
         statusCode: 400
       });
     }
@@ -53,26 +53,41 @@ exports.getNearbyRestaurants = async (req, res) => {
         },
       },
       active: true,
-    }).select("name address openingHours minOrderAmount foodType phone rating images ");
+    }).select("name address openingHours minOrderAmount foodType phone rating images active createdAt paymentMethods kycStatus");
+
+    // Map to clean response
+    const responseData = restaurants.map(restaurant => ({
+      _id: restaurant._id,
+      name: restaurant.name,
+      address: restaurant.address,
+      phone: restaurant.phone,
+      images: restaurant.images,
+      foodType: restaurant.foodType,
+      rating: restaurant.rating,
+      minOrderAmount: restaurant.minOrderAmount,
+      openingHours: restaurant.openingHours,
+      paymentMethods: restaurant.paymentMethods,
+      active: restaurant.active ? "active" : "inactive",
+      createdAt: restaurant.createdAt
+    }));
 
     res.status(200).json({
       message: "Nearby restaurants fetched successfully.",
       messageType: "success",
       statusCode: 200,
-      count: restaurants.length,
-      data: restaurants
+      count: responseData.length,
+      data: responseData
     });
 
   } catch (error) {
     console.error(error);
     res.status(500).json({
       message: "Server error while fetching nearby restaurants.",
-      messageType: "error",
+      messageType: "failure",
       statusCode: 500
     });
   }
 };
-
 
 exports.getNearbyCategories = async (req, res) => {
   try {
