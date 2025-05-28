@@ -351,8 +351,6 @@ exports.getRecommendedRestaurants = async (req, res) => {
     }
 
     const restaurants = await Restaurant.find({
-      active: true,
-      minOrderAmount: { $lte: minOrder },
       location: {
         $near: {
           $geometry: {
