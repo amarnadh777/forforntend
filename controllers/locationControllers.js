@@ -341,7 +341,6 @@ exports.getNearbyCategoriesMock = async (req, res) => {
   }
 };
 
-
 exports.getRecommendedRestaurants = async (req, res) => {
   try {
     const { latitude, longitude, maxDistance = 5000, minOrderAmount = 0 } = req.query;
@@ -372,6 +371,7 @@ exports.getRecommendedRestaurants = async (req, res) => {
       });
     }
 
+    // Fetch restaurants sorted by rating within maxDistance
     const restaurants = await Restaurant.find({
       location: {
         $near: {
@@ -382,6 +382,8 @@ exports.getRecommendedRestaurants = async (req, res) => {
           $maxDistance: dist,
         },
       },
+      minOrderAmount: { $gte: minOrder },
+      active: true
     })
       .sort({ rating: -1 })
       .limit(20);
@@ -395,20 +397,20 @@ exports.getRecommendedRestaurants = async (req, res) => {
       });
     }
 
-    // Prepare clean response data
+    // Clean response for Flutter
     const responseData = restaurants.map((restaurant) => ({
-      _id: restaurant._id,
-      name: restaurant.name,
-      address: restaurant.address,
-      phone: restaurant.phone,
-      email: restaurant.email,
-      images: restaurant.images,
-      foodType: restaurant.foodType,
+      shopName: restaurant.name,
+      distance: restaurant.location
+        ? getDistanceFromLatLonInKm(lat, lng, restaurant.location.coordinates[1], restaurant.location.coordinates[0]).toFixed(2)
+        : null,
+      merchantId: restaurant._id,
+      image: {
+        imageName: restaurant.images && restaurant.images.length > 0
+          ? restaurant.images[0]
+          : "https://default-image-url.com/default.jpg"
+      },
       rating: restaurant.rating,
-      minOrderAmount: restaurant.minOrderAmount,
-      paymentMethods: restaurant.paymentMethods,
-      active: restaurant.active ? "active" : "inactive",
-      createdAt: restaurant.createdAt,
+      minOrderAmount: restaurant.minOrderAmount
     }));
 
     return res.status(200).json({
