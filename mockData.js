@@ -2,7 +2,7 @@ const categories = [
   {
     categoryId: 1,
     categoryName: "Fruits",
-    restaurantId: "rest_101",
+    restaurantId: "682c28a8e269347b428cd539",  // changed here
     categoryimagerelation: {
       imageName: "https://example.com/fruits.jpg"
     },
@@ -10,7 +10,7 @@ const categories = [
       {
         subCategoryId: 101,
         subcategoryName: "Apples",
-        restaurantId: "rest_101",
+        restaurantId: "682c28a8e269347b428cd539",  // changed here
         subcategoryImagerelation: {
           imageName: "https://example.com/apples.jpg"
         }
@@ -18,7 +18,7 @@ const categories = [
       {
         subCategoryId: 102,
         subcategoryName: "Bananas",
-        restaurantId: "rest_101",
+        restaurantId: "682c28a8e269347b428cd539",  // changed here
         subcategoryImagerelation: {
           imageName: "https://example.com/bananas.jpg"
         }
@@ -28,7 +28,7 @@ const categories = [
   {
     categoryId: 2,
     categoryName: "Vegetables",
-    restaurantId: "rest_101",
+    restaurantId: "6835cf75451788eb5e4e9e01",  // changed here
     categoryimagerelation: {
       imageName: "https://example.com/vegetables.jpg"
     },
@@ -36,7 +36,7 @@ const categories = [
       {
         subCategoryId: 201,
         subcategoryName: "Tomatoes",
-        restaurantId: "rest_101",
+        restaurantId: "6835cf75451788eb5e4e9e01",  // changed here
         subcategoryImagerelation: {
           imageName: "https://example.com/tomatoes.jpg"
         }
@@ -44,14 +44,13 @@ const categories = [
       {
         subCategoryId: 202,
         subcategoryName: "Spinach",
-        restaurantId: "rest_101",
+        restaurantId: "6835cf75451788eb5e4e9e01",  // changed here
         subcategoryImagerelation: {
           imageName: "https://example.com/spinach.jpg"
         }
       }
     ]
   },
-  // Categories for restaurant rest_102
   {
     categoryId: 3,
     categoryName: "Dairy",
@@ -103,13 +102,40 @@ const categories = [
         }
       }
     ]
+  },
+  
+  {
+    categoryId: 5,
+    categoryName: "Snacks",
+    restaurantId: "6836b1e8201835ed8788e9c4",
+    categoryimagerelation: {
+      imageName: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT8_W0qpAEt32KB_CpRoe1GhDUoDGTtcJZGoQ&sg"
+    },
+    categoryrelation1: [
+      {
+        subCategoryId: 501,
+        subcategoryName: "Chips",
+        restaurantId: "6836b1e8201835ed8788e9c4",
+        subcategoryImagerelation: {
+          imageName: "https://example.com/chips.jpg"
+        }
+      },
+      {
+        subCategoryId: 502,
+        subcategoryName: "Cookies",
+        restaurantId: "6836b1e8201835ed8788e9c4",
+        subcategoryImagerelation: {
+          imageName: "https://example.com/cookies.jpg"
+        }
+      }
+    ]
   }
 ];
 
 
 const restaurants = [
   {
-    restaurantId: "rest_101",
+    restaurantId: "6835cf75451788eb5e4e9e01",  // changed here
     name: "Fresh Farm Store",
     location: {
       type: "Point",
@@ -127,4 +153,5 @@ const restaurants = [
     address: "Mumbai, Maharashtra, India",
   },
 ];
+
 module.exports = { categories, restaurants };
