@@ -303,3 +303,81 @@ exports.getNearbyCategoriesMock = async (req, res) => {
     });
   }
 };
+
+
+
+exports.getRecommendedRestaurants = async (req, res) => {
+  try {
+    const { latitude, longitude, maxDistance = 5000, minOrderAmount = 0 } = req.query;
+
+    // Validate latitude and longitude presence
+    if (latitude === undefined || longitude === undefined) {
+      return res.status(400).json({
+        messageType: "failure",
+        message: "Latitude and longitude are required.",
+        statusCode: 400,
+      });
+    }
+
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+    const dist = parseInt(maxDistance, 10);
+    const minOrder = parseInt(minOrderAmount, 10);
+
+    if (isNaN(lat) || lat < -90 || lat > 90 || isNaN(lng) || lng < -180 || lng > 180) {
+      return res.status(400).json({
+        messageType: "failure",
+        message: "Invalid latitude or longitude values.",
+        statusCode: 400,
+      });
+    }
+
+    if (isNaN(dist) || dist <= 0) {
+      return res.status(400).json({
+        messageType: "failure",
+        message: "maxDistance must be a positive number (meters).",
+        statusCode: 400,
+      });
+    }
+
+    const restaurants = await Restaurant.find({
+      active: true,
+      minOrderAmount: { $lte: minOrder },
+      location: {
+        $near: {
+          $geometry: {
+            type: "Point",
+            coordinates: [lng, lat],
+          },
+          $maxDistance: dist,
+        },
+      },
+    })
+    .sort({ rating: -1 })
+    .limit(20);
+
+    if (restaurants.length === 0) {
+      return res.status(200).json({
+        messageType: "failure",
+        message: "No recommended restaurants found in your area.",
+        count: 0,
+        data: [],
+      });
+    }
+
+    return res.status(200).json({
+      messageType: "success",
+      message: "Recommended restaurants fetched successfully.",
+      count: restaurants.length,
+      data: restaurants,
+    });
+
+  } catch (error) {
+    console.error('Error fetching recommended restaurants:', error);
+    return res.status(500).json({
+      messageType: "failure",
+      message: "Server error while fetching recommended restaurants.",
+      statusCode: 500,
+    });
+  }
+};
