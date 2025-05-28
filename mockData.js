@@ -4,7 +4,7 @@ const categories = [
     categoryName: "Fruits",
     restaurantId: "682c28a8e269347b428cd539",  // changed here
     categoryimagerelation: {
-      imageName: "https://example.com/fruits.jpg"
+      imageName: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQLDpqhgA4X70ByudPepForCDba05T8h3a0HQ&s"
     },
     categoryrelation1: [  
       {
@@ -12,7 +12,7 @@ const categories = [
         subcategoryName: "Apples",
         restaurantId: "682c28a8e269347b428cd539",  // changed here
         subcategoryImagerelation: {
-          imageName: "https://example.com/apples.jpg"
+          imageName: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQqrup5s5xLJto6g7ua7wBuqFtHhrxuDPbV6A&s"
         }
       },
       {
@@ -20,7 +20,7 @@ const categories = [
         subcategoryName: "Bananas",
         restaurantId: "682c28a8e269347b428cd539",  // changed here
         subcategoryImagerelation: {
-          imageName: "https://example.com/bananas.jpg"
+          imageName: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRvB8TwVu6IajXBXGb_vmigdZmm7iTL-MUVhw&s"
         }
       }
     ]
@@ -117,7 +117,7 @@ const categories = [
         subcategoryName: "Chips",
         restaurantId: "6836b1e8201835ed8788e9c4",
         subcategoryImagerelation: {
-          imageName: "https://example.com/chips.jpg"
+          imageName: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQbozyzuTXDQd1farDoqlkhzinrfIzt_52-Aw&s"
         }
       },
       {
@@ -125,7 +125,7 @@ const categories = [
         subcategoryName: "Cookies",
         restaurantId: "6836b1e8201835ed8788e9c4",
         subcategoryImagerelation: {
-          imageName: "https://example.com/cookies.jpg"
+          imageName: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQbdkFOcPtheaWkfyEERPaZDKCzP1Q_nwUYlQ&s"
         }
       }
     ]
