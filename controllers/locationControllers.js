@@ -305,17 +305,14 @@ exports.getNearbyCategoriesMock = async (req, res) => {
 };
 
 
-
 exports.getRecommendedRestaurants = async (req, res) => {
   try {
     const { latitude, longitude, maxDistance = 5000, minOrderAmount = 0 } = req.query;
 
-    // Validate latitude and longitude presence
     if (latitude === undefined || longitude === undefined) {
       return res.status(400).json({
         messageType: "failure",
         message: "Latitude and longitude are required.",
-        statusCode: 400,
       });
     }
 
@@ -328,7 +325,6 @@ exports.getRecommendedRestaurants = async (req, res) => {
       return res.status(400).json({
         messageType: "failure",
         message: "Invalid latitude or longitude values.",
-        statusCode: 400,
       });
     }
 
@@ -336,13 +332,12 @@ exports.getRecommendedRestaurants = async (req, res) => {
       return res.status(400).json({
         messageType: "failure",
         message: "maxDistance must be a positive number (meters).",
-        statusCode: 400,
       });
     }
 
     const restaurants = await Restaurant.find({
       active: true,
-   
+      minOrderAmount: { $lte: minOrder },
       location: {
         $near: {
           $geometry: {
@@ -353,23 +348,39 @@ exports.getRecommendedRestaurants = async (req, res) => {
         },
       },
     })
-    .sort({ rating: -1 })
-    .limit(20);
+      .sort({ rating: -1 })
+      .limit(20);
 
     if (restaurants.length === 0) {
       return res.status(200).json({
-        messageType: "failure",
+        messageType: "success",
         message: "No recommended restaurants found in your area.",
         count: 0,
         data: [],
       });
     }
 
+    // Prepare clean response data
+    const responseData = restaurants.map((restaurant) => ({
+      _id: restaurant._id,
+      name: restaurant.name,
+      address: restaurant.address,
+      phone: restaurant.phone,
+      email: restaurant.email,
+      images: restaurant.images,
+      foodType: restaurant.foodType,
+      rating: restaurant.rating,
+      minOrderAmount: restaurant.minOrderAmount,
+      paymentMethods: restaurant.paymentMethods,
+      active: restaurant.active ? "active" : "inactive",
+      createdAt: restaurant.createdAt,
+    }));
+
     return res.status(200).json({
       messageType: "success",
       message: "Recommended restaurants fetched successfully.",
-      count: restaurants.length,
-      data: restaurants,
+      count: responseData.length,
+      data: responseData,
     });
 
   } catch (error) {
@@ -377,7 +388,6 @@ exports.getRecommendedRestaurants = async (req, res) => {
     return res.status(500).json({
       messageType: "failure",
       message: "Server error while fetching recommended restaurants.",
-      statusCode: 500,
     });
   }
 };
