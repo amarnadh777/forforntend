@@ -2,6 +2,29 @@
 const Restaurant = require("../models/restaurantModel")
 const Category = require("../models/categoryModel")
 const { categories, restaurants } = require('../mockData')
+
+
+// Haversine formula to calculate distance between two coordinates in km
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c;
+  return d;
+}
+
+function deg2rad(deg) {
+  return deg * (Math.PI / 180);
+}
+
+
+
+
 exports.getNearbyRestaurants = async (req, res) => {
   try {
     const { latitude, longitude, distance = 5000 } = req.query;
@@ -42,6 +65,7 @@ exports.getNearbyRestaurants = async (req, res) => {
       });
     }
 
+    // Find active restaurants near the given location within maxDistance
     const restaurants = await Restaurant.find({
       location: {
         $near: {
@@ -53,25 +77,23 @@ exports.getNearbyRestaurants = async (req, res) => {
         },
       },
       active: true,
-    }).select("name address openingHours minOrderAmount foodType phone rating images active createdAt paymentMethods kycStatus");
+    }).select("name location images");
 
-    // Map to clean response
+    // Map response to match Flutter's expected structure
     const responseData = restaurants.map(restaurant => ({
-      _id: restaurant._id,
-      name: restaurant.name,
-      address: restaurant.address,
-      phone: restaurant.phone,
-      images: restaurant.images,
-      foodType: restaurant.foodType,
-      rating: restaurant.rating,
-      minOrderAmount: restaurant.minOrderAmount,
-      openingHours: restaurant.openingHours,
-      paymentMethods: restaurant.paymentMethods,
-      active: restaurant.active ? "active" : "inactive",
-      createdAt: restaurant.createdAt
+      shopName: restaurant.name,
+      distance: restaurant.location
+        ? getDistanceFromLatLonInKm(lat, lng, restaurant.location.coordinates[1], restaurant.location.coordinates[0]).toFixed(2)
+        : null,
+      merchantId: restaurant._id,
+      image: {
+        imageName: restaurant.images && restaurant.images.length > 0
+          ? restaurant.images[0]
+          : "https://default-image-url.com/default.jpg"
+      }
     }));
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Nearby restaurants fetched successfully.",
       messageType: "success",
       statusCode: 200,
@@ -81,7 +103,7 @@ exports.getNearbyRestaurants = async (req, res) => {
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({
+    return res.status(500).json({
       message: "Server error while fetching nearby restaurants.",
       messageType: "failure",
       statusCode: 500

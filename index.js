@@ -3,7 +3,7 @@ const dotenv = require("dotenv");
 const socketIo = require("socket.io");
 const mongoose = require("mongoose");
 const http = require("http");
-
+const cors = require('cors');
 dotenv.config();
 
 const app = express();
@@ -11,6 +11,14 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   cors: { origin: "*" },
 });
+app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5173',  // your frontend URL
+  methods: ['GET', 'POST', 'PUT', 'DELETE'], // allowed HTTP methods
+  credentials: true,  // if you need cookies or authorization headers
+}));
+
+
 
 // Attach io to app
 io.on("connection", (socket) => {

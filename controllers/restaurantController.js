@@ -1,4 +1,6 @@
 const Restaurant = require("../models/restaurantModel")
+const Category = require("../models/categoryModel")
+const Product = require("../models/productModel")
 const mongoose = require("mongoose");
 exports.createRestaurant = async (req, res) => {
   try {
@@ -285,29 +287,27 @@ exports.deleteRestaurant = async (req, res) => {
 }
 
 exports.getRestaurantById = async (req, res) => {
- 
   try {
     const { restaurantId } = req.params;
-  
-    if (!restaurantId) {
-      return res.status(400).json({ message: 'restaurantId is required.' });
-    }
-      if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
-      return res.status(400).json({ message: 'Invalid restaurantId format.' });
-    }
-       const restaurant = await Restaurant.findById(restaurantId);
-        if (!restaurant) {
-      return res.status(404).json({ message: 'Restaurant not found.' });
+
+    if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+      return res.status(400).json({ error: "Invalid restaurantId format." });
     }
 
-       res.status(200).json({ message: 'Restaurant fetched successfully.', restaurant });
-  
+    const restaurant = await Restaurant.findById(restaurantId)
+      .select("-ownerId -kycDocuments -__v"); // exclude sensitive or unnecessary fields
+
+    if (!restaurant) {
+      return res.status(404).json({ error: "Restaurant not found." });
+    }
+
+    res.status(200).json(restaurant);
+
   } catch (error) {
-     console.error(error);
-    res.status(500).json({ message: 'Server error.' });
+    console.error("Error fetching restaurant by ID:", error);
+    res.status(500).json({ error: "Internal server error." });
   }
-
-}
+};
 
 // Enable merchants to set and update their daily and weekly business hours.
 exports.updateBusinessHours = async (req, res) => {
@@ -379,3 +379,62 @@ exports.addKyc = async (req, res) => {
 exports.addServiceArea = async (req, res) => {
  
 };
+
+
+
+
+
+exports.getRestaurantMenu  = async(req,res) =>
+{
+const { restaurantId } = req.params;
+
+
+
+  try {
+    // Fetch all active categories for this restaurant
+    const categories = await Category.find({ restaurantId, active: true });
+
+    if (!categories.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'No categories found for this restaurant.'
+      });
+    }
+
+    // Fetch products for each category
+    const menu = await Promise.all(
+      categories.map(async (category) => {
+        const products = await Product.find({
+          restaurantId,
+          categoryId: category._id,
+          active: true
+        }) // populating addOns if you have it
+        // exclude extra fields if needed
+
+        return {
+          categoryId: category._id,
+          categoryName: category.name,
+          description: category.description,
+          images: category.images,
+          items: products
+        };
+      })
+    );
+
+    res.status(200).json({
+      success: true,
+      restaurantId,
+      menu
+    });
+
+  } catch (error) {
+    console.error('Error fetching menu:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch restaurant menu'
+    });
+  }
+
+
+}
+
