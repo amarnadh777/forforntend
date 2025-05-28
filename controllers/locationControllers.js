@@ -408,9 +408,8 @@ exports.getRecommendedRestaurants = async (req, res) => {
         imageName: restaurant.images && restaurant.images.length > 0
           ? restaurant.images[0]
           : "https://default-image-url.com/default.jpg"
-      },
-      rating: restaurant.rating,
-      minOrderAmount: restaurant.minOrderAmount
+      }
+   
     }));
 
     return res.status(200).json({
