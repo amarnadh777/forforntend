@@ -124,7 +124,7 @@ const dummyCategories = [
 app.get("/", (req, res) => {
   res.send("API is running 🚀");
 });
-app.get("test/categories", (req, res) => {
+app.get("/test/categories", (req, res) => {
   res.status(200).json(dummyCategories);
 });
 
