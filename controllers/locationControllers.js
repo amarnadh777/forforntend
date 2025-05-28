@@ -80,7 +80,7 @@ exports.getNearbyCategories = async (req, res) => {
     if (latitude === undefined || longitude === undefined) {
       return res.status(400).json({
         message: "Latitude and longitude are required in query parameters.",
-        messageType: "error",
+        messageType: "failure",
         statusCode: 400,
       });
     }
@@ -92,7 +92,7 @@ exports.getNearbyCategories = async (req, res) => {
     if (isNaN(lat) || lat < -90 || lat > 90) {
       return res.status(400).json({
         message: "Invalid latitude. Must be a number between -90 and 90.",
-        messageType: "error",
+        messageType: "failure",
         statusCode: 400,
       });
     }
@@ -100,7 +100,7 @@ exports.getNearbyCategories = async (req, res) => {
     if (isNaN(lng) || lng < -180 || lng > 180) {
       return res.status(400).json({
         message: "Invalid longitude. Must be a number between -180 and 180.",
-        messageType: "error",
+        messageType: "failure",
         statusCode: 400,
       });
     }
@@ -108,7 +108,7 @@ exports.getNearbyCategories = async (req, res) => {
     if (isNaN(dist) || dist <= 0) {
       return res.status(400).json({
         message: "Distance must be a positive number (in meters).",
-        messageType: "error",
+        messageType: "failure",
         statusCode: 400,
       });
     }
@@ -152,7 +152,7 @@ exports.getNearbyCategories = async (req, res) => {
 
     const uniqueCategories = Array.from(uniqueCategoriesMap.values());
 
-    // 3. Return categories
+    // 3. Return cegories
     return res.status(200).json({
       message: "Nearby categories fetched successfully.",
       messageType: "success",

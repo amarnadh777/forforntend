@@ -47,9 +47,94 @@ app.use("/location", locationRouter);
 app.use("/agent", agentRouter);
 app.use("/feedback", feedbackRoutes);
 
+
+
+
+
+
+
+
+
+
+const dummyCategories = [
+  {
+    categoryName: "Fruits",
+    categoryId: 1,
+    categoryimagerelation: {
+      imageName: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTjhcvIlF6I8UzQly7Qzkh2vAHtSGwbgq_XPg&s"
+    },
+    categoryrelation1: [
+      {
+        subCategoryId: 101,
+        subcategoryName: "Apples",
+        subcategoryImagerelation: {
+          imageName: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSW-oteAACfNN68JU4E2egKJeaMrL8kdUQuuA&s"
+        }
+      },
+      {
+        subCategoryId: 102,
+        subcategoryName: "Bananas",
+        subcategoryImagerelation: {
+          imageName: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT-E3j6WhT2uOrCGqZABI_m8E4fCXNMYdXhmA&s"
+        }
+      }
+    ]
+  },
+  {
+    categoryName: "Vegetables",
+    categoryId: 2,
+    categoryimagerelation: {
+      imageName: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNULJ6YE0WsLqqBUs3ozHh6rkZDFAJlXzlFw&s"
+    },
+    categoryrelation1: [
+      {
+        subCategoryId: 201,
+        subcategoryName: "Tomatoes",
+        subcategoryImagerelation: {
+          imageName: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSsTnN1VYHPxQDMCDKBZWs2mKGXT2bO9arKYfO3g9LjMvjLiuCoVNuCeEA&s"
+        }
+      },
+      {
+        subCategoryId: 202,
+        subcategoryName: "Spinach",
+        subcategoryImagerelation: {
+          imageName: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSsTnN1VYHPxQDMCDKBZWs2mKGXT2bO9arKYfO3g9LjMvjLiuCoVNuCeEA&s"
+        }
+      }
+    ]
+  }
+];
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 app.get("/", (req, res) => {
   res.send("API is running 🚀");
 });
+app.get("test/categories", (req, res) => {
+  res.status(200).json(dummyCategories);
+});
+
+
+
+
+
+
+
+
 
 // ✅ Connect to DB and start server only after DB is connected
 const PORT = process.env.PORT || 5000;
