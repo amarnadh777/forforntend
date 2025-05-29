@@ -384,11 +384,8 @@ exports.addServiceArea = async (req, res) => {
 
 
 
-exports.getRestaurantMenu  = async(req,res) =>
-{
-const { restaurantId } = req.params;
-
-
+exports.getRestaurantMenu = async (req, res) => {
+  const { restaurantId } = req.params;
 
   try {
     // Fetch all active categories for this restaurant
@@ -396,20 +393,19 @@ const { restaurantId } = req.params;
 
     if (!categories.length) {
       return res.status(404).json({
-        success: false,
-        message: 'No categories found for this restaurant.'
+        message: 'No categories found for this restaurant.',
+        messageType: 'failure',
+        data: null
       });
     }
 
-    // Fetch products for each category
+    // Fetch products for each category (exclude sensitive fields)
     const menu = await Promise.all(
       categories.map(async (category) => {
         const products = await Product.find({
           restaurantId,
           categoryId: category._id,
-          active: true
-        }) // populating addOns if you have it
-        // exclude extra fields if needed
+        }).select('-revenueShare -costPrice -profitMargin'); // exclude fields here
 
         return {
           categoryId: category._id,
@@ -422,19 +418,17 @@ const { restaurantId } = req.params;
     );
 
     res.status(200).json({
-      success: true,
-      restaurantId,
-      menu
+      message: 'Menu fetched successfully',
+      messageType: 'success',
+      data: menu
     });
 
   } catch (error) {
     console.error('Error fetching menu:', error);
     res.status(500).json({
-      success: false,
-      message: 'Failed to fetch restaurant menu'
+      message: 'Failed to fetch restaurant menu',
+      messageType: 'failure',
+      data: null
     });
   }
-
-
-}
-
+};
