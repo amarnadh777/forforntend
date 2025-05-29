@@ -23,8 +23,6 @@ function deg2rad(deg) {
 }
 
 
-
-
 exports.getNearbyRestaurants = async (req, res) => {
   try {
     const { latitude, longitude, distance = 5000 } = req.query;
@@ -65,7 +63,7 @@ exports.getNearbyRestaurants = async (req, res) => {
       });
     }
 
-    // Find active restaurants near the given location within maxDistance
+    // Fetch active restaurants within max distance
     const restaurants = await Restaurant.find({
       location: {
         $near: {
@@ -79,19 +77,47 @@ exports.getNearbyRestaurants = async (req, res) => {
       active: true,
     }).select("name location images");
 
-    // Map response to match Flutter's expected structure
-    const responseData = restaurants.map(restaurant => ({
-      shopName: restaurant.name,
-      distance: restaurant.location
-        ? getDistanceFromLatLonInKm(lat, lng, restaurant.location.coordinates[1], restaurant.location.coordinates[0]).toFixed(2)
-        : null,
-      merchantId: restaurant._id,
-      image: {
-        imageName: restaurant.images && restaurant.images.length > 0
-          ? restaurant.images[0]
-          : "https://default-image-url.com/default.jpg"
-      }
-    }));
+    if (restaurants.length === 0) {
+      return res.status(200).json({
+        message: "No nearby restaurants found.",
+        messageType: "success",
+        statusCode: 200,
+        count: 0,
+        data: []
+      });
+    }
+
+    // Map response for frontend with delivery time calculation
+    const responseData = restaurants.map((restaurant) => {
+      const distanceKm = restaurant.location
+        ? getDistanceFromLatLonInKm(
+            lat,
+            lng,
+            restaurant.location.coordinates[1],
+            restaurant.location.coordinates[0]
+          )
+        : null;
+
+      // Delivery time estimate based on distance
+      let deliveryTime;
+      if (distanceKm <= 2) deliveryTime = "20 mins";
+      else if (distanceKm <= 5) deliveryTime = "30 mins";
+      else if (distanceKm <= 8) deliveryTime = "40 mins";
+      else deliveryTime = "50+ mins";
+
+      return {
+        shopName: restaurant.name,
+        distance: distanceKm ? distanceKm.toFixed(2) : null,
+        deliveryTime,
+        merchantId: restaurant._id,
+        image: {
+          imageName:
+            restaurant.images && restaurant.images.length > 0
+              ? restaurant.images[0]
+              : "https://default-image-url.com/default.jpg",
+        },
+      };
+    });
 
     return res.status(200).json({
       message: "Nearby restaurants fetched successfully.",
@@ -102,7 +128,7 @@ exports.getNearbyRestaurants = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("Error fetching nearby restaurants:", error);
     return res.status(500).json({
       message: "Server error while fetching nearby restaurants.",
       messageType: "failure",
@@ -110,7 +136,6 @@ exports.getNearbyRestaurants = async (req, res) => {
     });
   }
 };
-
 exports.getNearbyCategories = async (req, res) => {
   try {
     const { latitude, longitude, distance = 5000 } = req.query;
@@ -397,20 +422,37 @@ exports.getRecommendedRestaurants = async (req, res) => {
       });
     }
 
-    // Clean response for Flutter
-    const responseData = restaurants.map((restaurant) => ({
-      shopName: restaurant.name,
-      distance: restaurant.location
-        ? getDistanceFromLatLonInKm(lat, lng, restaurant.location.coordinates[1], restaurant.location.coordinates[0]).toFixed(2)
-        : null,
-      merchantId: restaurant._id,
-      image: {
-        imageName: restaurant.images && restaurant.images.length > 0
-          ? restaurant.images[0]
-          : "https://default-image-url.com/default.jpg"
-      }
-   
-    }));
+    // Clean response for frontend with delivery time calculation
+    const responseData = restaurants.map((restaurant) => {
+      const distanceKm = restaurant.location
+        ? getDistanceFromLatLonInKm(
+            lat,
+            lng,
+            restaurant.location.coordinates[1],
+            restaurant.location.coordinates[0]
+          )
+        : null;
+
+      // Delivery time estimate based on distance
+      let deliveryTime;
+      if (distanceKm <= 2) deliveryTime = "20 mins";
+      else if (distanceKm <= 5) deliveryTime = "30 mins";
+      else if (distanceKm <= 8) deliveryTime = "40 mins";
+      else deliveryTime = "50+ mins";
+
+      return {
+        shopName: restaurant.name,
+        distance: distanceKm ? distanceKm.toFixed(2) : null,
+        deliveryTime,
+        merchantId: restaurant._id,
+        image: {
+          imageName:
+            restaurant.images && restaurant.images.length > 0
+              ? restaurant.images[0]
+              : "https://default-image-url.com/default.jpg",
+        },
+      };
+    });
 
     return res.status(200).json({
       messageType: "success",
@@ -418,9 +460,8 @@ exports.getRecommendedRestaurants = async (req, res) => {
       count: responseData.length,
       data: responseData,
     });
-
   } catch (error) {
-    console.error('Error fetching recommended restaurants:', error);
+    console.error("Error fetching recommended restaurants:", error);
     return res.status(500).json({
       messageType: "failure",
       message: "Server error while fetching recommended restaurants.",
