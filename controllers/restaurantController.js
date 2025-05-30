@@ -381,14 +381,11 @@ exports.addServiceArea = async (req, res) => {
 };
 
 
-
-
 exports.getRestaurantMenu = async (req, res) => {
   const { restaurantId } = req.params;
   const {
-    categoryLimit = 5,    // limit number of categories fetched
-    productPage = 1,      // pagination page for products inside each category
-    productLimit = 10     // how many products per category page
+    categoryLimit = 5,  // number of categories per page
+    categoryPage = 1    // current page of categories
   } = req.query;
 
   try {
@@ -401,11 +398,10 @@ exports.getRestaurantMenu = async (req, res) => {
       });
     }
 
-    // Fetch limited active categories for this restaurant
-    const categories = await Category.find({ restaurantId, active: true })
-      .limit(parseInt(categoryLimit));
+    // Count total active categories for the restaurant
+    const totalCategories = await Category.countDocuments({ restaurantId, active: true });
 
-    if (!categories.length) {
+    if (totalCategories === 0) {
       return res.status(404).json({
         message: 'No categories found for this restaurant.',
         messageType: 'failure',
@@ -413,30 +409,25 @@ exports.getRestaurantMenu = async (req, res) => {
       });
     }
 
-    // Fetch paginated products for each category (exclude sensitive fields)
+    // Fetch categories with pagination (skip and limit)
+    const categories = await Category.find({ restaurantId, active: true })
+      .skip((parseInt(categoryPage) - 1) * parseInt(categoryLimit))
+      .limit(parseInt(categoryLimit));
+
+    // Fetch all products for each category (no product pagination)
     const menu = await Promise.all(
       categories.map(async (category) => {
-        const totalProducts = await Product.countDocuments({
-          restaurantId,
-          categoryId: category._id,
-        });
-
         const products = await Product.find({
           restaurantId,
           categoryId: category._id,
-        })
-          .select('-revenueShare -costPrice -profitMargin')
-          .skip((parseInt(productPage) - 1) * parseInt(productLimit))
-          .limit(parseInt(productLimit));
+        }).select('-revenueShare -costPrice -profitMargin');
 
         return {
           categoryId: category._id,
           categoryName: category.name,
           description: category.description,
           images: category.images,
-          totalProducts,
-          productPage: parseInt(productPage),
-          totalProductPages: Math.ceil(totalProducts / productLimit),
+          totalProducts: products.length,
           items: products
         };
       })
@@ -445,7 +436,12 @@ exports.getRestaurantMenu = async (req, res) => {
     res.status(200).json({
       message: 'Menu fetched successfully',
       messageType: 'success',
-      data: menu
+      data: {
+        totalCategories,
+        categoryPage: parseInt(categoryPage),
+        totalCategoryPages: Math.ceil(totalCategories / categoryLimit),
+        menu
+      }
     });
 
   } catch (error) {
