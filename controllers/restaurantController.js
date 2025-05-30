@@ -382,12 +382,28 @@ exports.addServiceArea = async (req, res) => {
 
 
 
+
 exports.getRestaurantMenu = async (req, res) => {
   const { restaurantId } = req.params;
-  const { page = 1, limit = 10 } = req.query;  // default to page 1, 10 products per category
+  const {
+    categoryLimit = 5,    // limit number of categories fetched
+    productPage = 1,      // pagination page for products inside each category
+    productLimit = 10     // how many products per category page
+  } = req.query;
 
   try {
-    const categories = await Category.find({ restaurantId, active: true });
+    // Validate restaurantId
+    if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+      return res.status(400).json({
+        message: 'Invalid restaurantId format',
+        messageType: 'failure',
+        data: null,
+      });
+    }
+
+    // Fetch limited active categories for this restaurant
+    const categories = await Category.find({ restaurantId, active: true })
+      .limit(parseInt(categoryLimit));
 
     if (!categories.length) {
       return res.status(404).json({
@@ -397,20 +413,21 @@ exports.getRestaurantMenu = async (req, res) => {
       });
     }
 
+    // Fetch paginated products for each category (exclude sensitive fields)
     const menu = await Promise.all(
       categories.map(async (category) => {
+        const totalProducts = await Product.countDocuments({
+          restaurantId,
+          categoryId: category._id,
+        });
+
         const products = await Product.find({
           restaurantId,
           categoryId: category._id,
         })
           .select('-revenueShare -costPrice -profitMargin')
-          .skip((page - 1) * limit)
-          .limit(parseInt(limit));
-
-        const totalProducts = await Product.countDocuments({
-          restaurantId,
-          categoryId: category._id,
-        });
+          .skip((parseInt(productPage) - 1) * parseInt(productLimit))
+          .limit(parseInt(productLimit));
 
         return {
           categoryId: category._id,
@@ -418,8 +435,8 @@ exports.getRestaurantMenu = async (req, res) => {
           description: category.description,
           images: category.images,
           totalProducts,
-          page: parseInt(page),
-          totalPages: Math.ceil(totalProducts / limit),
+          productPage: parseInt(productPage),
+          totalProductPages: Math.ceil(totalProducts / productLimit),
           items: products
         };
       })
