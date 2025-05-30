@@ -382,13 +382,11 @@ exports.addServiceArea = async (req, res) => {
 
 
 
-
-
 exports.getRestaurantMenu = async (req, res) => {
   const { restaurantId } = req.params;
+  const { page = 1, limit = 10 } = req.query;  // default to page 1, 10 products per category
 
   try {
-    // Fetch all active categories for this restaurant
     const categories = await Category.find({ restaurantId, active: true });
 
     if (!categories.length) {
@@ -399,19 +397,29 @@ exports.getRestaurantMenu = async (req, res) => {
       });
     }
 
-    // Fetch products for each category (exclude sensitive fields)
     const menu = await Promise.all(
       categories.map(async (category) => {
         const products = await Product.find({
           restaurantId,
           categoryId: category._id,
-        }).select('-revenueShare -costPrice -profitMargin'); // exclude fields here
+        })
+          .select('-revenueShare -costPrice -profitMargin')
+          .skip((page - 1) * limit)
+          .limit(parseInt(limit));
+
+        const totalProducts = await Product.countDocuments({
+          restaurantId,
+          categoryId: category._id,
+        });
 
         return {
           categoryId: category._id,
           categoryName: category.name,
           description: category.description,
           images: category.images,
+          totalProducts,
+          page: parseInt(page),
+          totalPages: Math.ceil(totalProducts / limit),
           items: products
         };
       })
