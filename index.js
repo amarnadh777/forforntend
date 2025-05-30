@@ -1,39 +1,21 @@
 const express = require("express");
 const dotenv = require("dotenv");
-const socketIo = require("socket.io");
 const mongoose = require("mongoose");
-const http = require("http");
 const cors = require('cors');
+
 dotenv.config();
 
 const app = express();
-const server = http.createServer(app);
-const io = socketIo(server, {
-  cors: { origin: "*" },
-});
-app.use(cors());
+
 app.use(cors({
-  origin: 'http://localhost:5173',  // your frontend URL
-  methods: ['GET', 'POST', 'PUT', 'DELETE'], // allowed HTTP methods
-  credentials: true,  // if you need cookies or authorization headers
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-
-
-
-// Attach io to app
-io.on("connection", (socket) => {
-  console.log("New client connected: " + socket.id);
-
-  socket.on("join-restaurant", (restaurantId) => {
-    socket.join(restaurantId);
-    console.log(`Socket ${socket.id} joined restaurant ${restaurantId}`);
-  });
-});
-app.set("io", io);
 
 app.use(express.json());
 
-// routes using
+// ✅ routes using
 const userRouter = require("./routes/userRoutes");
 const productRouter = require("./routes/productRoutesRoutes");
 const resturantRouter = require("./routes/restaurantRoutes");
@@ -48,22 +30,13 @@ app.use("/user", userRouter);
 app.use("/restaurants", productRouter);
 app.use("/restaurants", resturantRouter);
 app.use("/restaurants", offerRouter);
-
 app.use("/order", orderRouter);
 app.use("/coupon", couponRoutes);
 app.use("/location", locationRouter);
 app.use("/agent", agentRouter);
 app.use("/feedback", feedbackRoutes);
 
-
-
-
-
-
-
-
-
-
+// ✅ dummy test route
 const dummyCategories = [
   {
     categoryName: "Fruits",
@@ -113,47 +86,23 @@ const dummyCategories = [
   }
 ];
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 app.get("/", (req, res) => {
   res.send("API is running 🚀");
 });
+
 app.get("/test/categories", (req, res) => {
   res.status(200).json(dummyCategories);
 });
 
-
-
-
-
-
-
-
-
-// ✅ Connect to DB and start server only after DB is connected
+// ✅ Connect to DB and start server
 const PORT = process.env.PORT || 5000;
 mongoose
   .connect(process.env.MONGO_URI, {
-  
-    serverSelectionTimeoutMS: 15000, // increased timeout
+    serverSelectionTimeoutMS: 15000,
   })
   .then(() => {
     console.log("✅ MongoDB connected");
-    server.listen(PORT, () => {
+    app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
     });
   })
