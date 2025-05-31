@@ -285,30 +285,41 @@ exports.deleteRestaurant = async (req, res) => {
     
   }
 }
-
 exports.getRestaurantById = async (req, res) => {
   try {
     const { restaurantId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
-      return res.status(400).json({ error: "Invalid restaurantId format." });
+      return res.status(400).json({
+        messageType: "failure",
+        message: "Invalid restaurantId format."
+      });
     }
 
     const restaurant = await Restaurant.findById(restaurantId)
-      .select("-ownerId -kycDocuments -__v"); // exclude sensitive or unnecessary fields
+      .select("-ownerId -kycDocuments -__v");
 
     if (!restaurant) {
-      return res.status(404).json({ error: "Restaurant not found." });
+      return res.status(404).json({
+        messageType: "failure",
+        message: "Restaurant not found."
+      });
     }
 
-    res.status(200).json(restaurant);
+    res.status(200).json({
+      messageType: "success",
+      message: "Restaurant fetched successfully.",
+      data: restaurant
+    });
 
   } catch (error) {
     console.error("Error fetching restaurant by ID:", error);
-    res.status(500).json({ error: "Internal server error." });
+    res.status(500).json({
+      messageType: "failure",
+      message: "Internal server error."
+    });
   }
 };
-
 // Enable merchants to set and update their daily and weekly business hours.
 exports.updateBusinessHours = async (req, res) => {
   try {
