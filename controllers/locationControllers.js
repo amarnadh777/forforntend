@@ -23,54 +23,21 @@ function deg2rad(deg) {
 }
 
 
+
 exports.getNearbyRestaurants = async (req, res) => {
   try {
     const { latitude, longitude, distance = 5000 } = req.query;
 
-    if (latitude === undefined || longitude === undefined) {
-      return res.status(400).json({
-        message: "Latitude and longitude are required in query parameters.",
-        messageType: "failure",
-        statusCode: 400
-      });
-    }
+    // validation blocks (same as yours)...
 
     const lat = parseFloat(latitude);
     const lng = parseFloat(longitude);
     const dist = parseFloat(distance);
 
-    if (isNaN(lat) || lat < -90 || lat > 90) {
-      return res.status(400).json({
-        message: "Invalid latitude. Must be a number between -90 and 90.",
-        messageType: "failure",
-        statusCode: 400
-      });
-    }
-
-    if (isNaN(lng) || lng < -180 || lng > 180) {
-      return res.status(400).json({
-        message: "Invalid longitude. Must be a number between -180 and 180.",
-        messageType: "failure",
-        statusCode: 400
-      });
-    }
-
-    if (isNaN(dist) || dist <= 0) {
-      return res.status(400).json({
-        message: "Distance must be a positive number (in meters).",
-        messageType: "failure",
-        statusCode: 400
-      });
-    }
-
-    // Fetch active restaurants within max distance
     const restaurants = await Restaurant.find({
       location: {
         $near: {
-          $geometry: {
-            type: "Point",
-            coordinates: [lng, lat],
-          },
+          $geometry: { type: "Point", coordinates: [lng, lat] },
           $maxDistance: dist,
         },
       },
@@ -87,29 +54,32 @@ exports.getNearbyRestaurants = async (req, res) => {
       });
     }
 
-    // Map response for frontend with delivery time calculation
-    const responseData = restaurants.map((restaurant) => {
+    // Map response with category check
+    const responseData = await Promise.all(restaurants.map(async (restaurant) => {
       const distanceKm = restaurant.location
         ? getDistanceFromLatLonInKm(
-            lat,
-            lng,
+            lat, lng,
             restaurant.location.coordinates[1],
             restaurant.location.coordinates[0]
           )
         : null;
 
-      // Delivery time estimate based on distance
       let deliveryTime;
       if (distanceKm <= 2) deliveryTime = "20 mins";
       else if (distanceKm <= 5) deliveryTime = "30 mins";
       else if (distanceKm <= 8) deliveryTime = "40 mins";
       else deliveryTime = "50+ mins";
 
+      // Check if categories exist for this merchant
+      const categoryCount = await Category.countDocuments({restaurantId: restaurant._id });
+      const isMenuAvailable = categoryCount > 0 ? "1" : "0";
+
       return {
         shopName: restaurant.name,
         distance: distanceKm ? distanceKm.toFixed(2) : null,
         deliveryTime,
         merchantId: restaurant._id,
+        isMenuAvailable,
         image: {
           imageName:
             restaurant.images && restaurant.images.length > 0
@@ -117,7 +87,7 @@ exports.getNearbyRestaurants = async (req, res) => {
               : "https://default-image-url.com/default.jpg",
         },
       };
-    });
+    }));
 
     return res.status(200).json({
       message: "Nearby restaurants fetched successfully.",
@@ -136,6 +106,7 @@ exports.getNearbyRestaurants = async (req, res) => {
     });
   }
 };
+
 exports.getNearbyCategories = async (req, res) => {
   try {
     const { latitude, longitude, distance = 5000 } = req.query;

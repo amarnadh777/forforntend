@@ -25,7 +25,7 @@ const offerRouter = require("./routes/offerRoutes");
 const orderRouter = require("./routes/orderRoutes");
 const couponRoutes = require("./routes/couponRoutes");
 const feedbackRoutes = require("./routes/feedbackRoutes");
-
+const cartRoutes = require("./routes/cartRoutes")
 app.use("/user", userRouter);
 app.use("/restaurants", productRouter);
 app.use("/restaurants", resturantRouter);
@@ -35,6 +35,7 @@ app.use("/coupon", couponRoutes);
 app.use("/location", locationRouter);
 app.use("/agent", agentRouter);
 app.use("/feedback", feedbackRoutes);
+
 
 // ✅ dummy test route
 const dummyCategories = [
