@@ -7,10 +7,10 @@ const mongoose = require('mongoose')
 
 
 exports.addToCart = async (req, res) => {
-  const userId = req.user._id;
-  const { restaurantId, products } = req.body;
-
   try {
+    const userId = req.user._id;
+    const { restaurantId, products } = req.body;
+
     // Validate input
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ message: "Invalid userId format", messageType: "failure" });
@@ -18,7 +18,7 @@ exports.addToCart = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
       return res.status(400).json({ message: "Invalid restaurantId format", messageType: "failure" });
     }
-    if (!products || !Array.isArray(products) || products.length === 0) {
+    if (!Array.isArray(products) || products.length === 0) {
       return res.status(400).json({ message: "Products must be a non-empty array", messageType: "failure" });
     }
 
@@ -31,60 +31,67 @@ exports.addToCart = async (req, res) => {
         restaurantId,
         products: []
       });
-    } else if (cart.restaurantId.toString() !== restaurantId) {
+    }
+
+    // If restaurantId changes, reset cart
+    if (cart.restaurantId.toString() !== restaurantId) {
       cart.products = [];
       cart.restaurantId = restaurantId;
     }
 
     // Process products
-    for (const prod of products) {
-      if (!prod.productId || !mongoose.Types.ObjectId.isValid(prod.productId)) continue;
+    await Promise.all(products.map(async (prod) => {
+      if (!prod.productId || !mongoose.Types.ObjectId.isValid(prod.productId)) return;
 
       const productData = await Product.findById(prod.productId);
-      if (!productData || productData.restaurantId.toString() !== restaurantId) continue;
+      if (!productData || productData.restaurantId.toString() !== restaurantId) return;
 
-      const index = cart.products.findIndex(p => p.productId.toString() === prod.productId);
+      const price = productData.price;
+      const quantityToAdd = prod.quantity > 0 ? prod.quantity : 1;
+      const existingIndex = cart.products.findIndex(p => p.productId.toString() === prod.productId);
 
-      if (prod.quantity === 0) {
-        if (index > -1) cart.products.splice(index, 1);
+      if (quantityToAdd === 0) {
+        // Remove product if exists
+        if (existingIndex > -1) cart.products.splice(existingIndex, 1);
       } else {
-        const newQty = prod.quantity > 0 ? prod.quantity : 1;
-        const price = productData.price;
-
-        if (index > -1) {
-          cart.products[index].quantity = newQty;
-          cart.products[index].total = newQty * price;
+        if (existingIndex > -1) {
+          // ✅ Increment existing quantity
+          const existingProduct = cart.products[existingIndex];
+          existingProduct.quantity += quantityToAdd;
+          existingProduct.total = existingProduct.quantity * price;
         } else {
+          // Add as new product
           cart.products.push({
             productId: prod.productId,
             name: productData.name,
             price,
-            quantity: newQty,
-            total: price * newQty
+            quantity: quantityToAdd,
+            total: quantityToAdd * price
           });
         }
       }
-    }
+    }));
 
     if (cart.products.length === 0) {
       return res.status(400).json({ message: "No valid products found to add to cart", messageType: "failure" });
     }
 
+    // Update total price
     cart.totalPrice = cart.products.reduce((sum, p) => sum + p.total, 0);
     await cart.save();
 
-    // Prepare response data with renamed keys
-   const cartObj = cart.toObject();
+    // Prepare response data
+    const cartObj = cart.toObject();
 
-const cartData = {
-  cartId: cartObj._id.toString(),
-  userId: cartObj.user.toString(),
-  restaurantId: cartObj.restaurantId,
-  products: cartObj.products,
-  totalPrice: cartObj.totalPrice,
-  createdAt: cartObj.createdAt,
-  updatedAt: cartObj.updatedAt,
-};
+    const cartData = {
+      cartId: cartObj._id.toString(),
+      userId: cartObj.user.toString(),
+      restaurantId: cartObj.restaurantId,
+      products: cartObj.products,
+      totalPrice: cartObj.totalPrice,
+      createdAt: cartObj.createdAt,
+      updatedAt: cartObj.updatedAt,
+    };
 
     return res.status(200).json({
       message: "Cart updated successfully",
@@ -93,9 +100,9 @@ const cartData = {
     });
 
   } catch (error) {
-    console.error("Error inside addToCart service:", error);
+    console.error("Add to cart error:", error);
     return res.status(500).json({
-      message: error.message || "Something went wrong",
+      message: "Internal server error",
       messageType: "failure"
     });
   }
@@ -209,27 +216,24 @@ exports.getCart = async (req, res) => {
       return res.status(200).json({
         message: "Cart is empty",
         messageType: "success",
-        data: { products: [] }
+        data: { items: [] }
       });
     }
 
-    // Convert mongoose document to plain object and rename keys
-    const cartObj = cart.toObject();
-
     const cartData = {
-      cartId: cartObj._id.toString(),
-      userId: cartObj.user.toString(),
-      restaurantId: cartObj.restaurantId.toString(),
-      products: cartObj.products,
-      totalPrice: cartObj.totalPrice,
-      createdAt: cartObj.createdAt,
-      updatedAt: cartObj.updatedAt,
-    };
+  cartId: cartObj._id.toString(),
+  userId: cartObj.user.toString(),
+  restaurantId: cartObj.restaurantId,
+  products: cartObj.products,
+  totalPrice: cartObj.totalPrice,
+  createdAt: cartObj.createdAt,
+  updatedAt: cartObj.updatedAt,
+};
 
     res.status(200).json({
       message: "Cart fetched successfully",
       messageType: "success",
-      data: cartData
+      data:cart
     });
   } catch (error) {
     console.error("Get Cart Error:", error);
