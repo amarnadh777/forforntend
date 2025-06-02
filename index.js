@@ -35,6 +35,7 @@ app.use("/coupon", couponRoutes);
 app.use("/location", locationRouter);
 app.use("/agent", agentRouter);
 app.use("/feedback", feedbackRoutes);
+app.use("/cart",cartRoutes)
 
 
 // ✅ dummy test route
