@@ -107,6 +107,71 @@ exports.addToCart = async (req, res) => {
     });
   }
 };
+exports.decreaseProductQuantity = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { productId } = req.body;
+
+    // Validate input
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid userId format", messageType: "failure" });
+    }
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "Invalid productId format", messageType: "failure" });
+    }
+
+    // Find cart
+    const cart = await Cart.findOne({ user: userId });
+    if (!cart) {
+      return res.status(404).json({ message: "Cart not found", messageType: "failure" });
+    }
+
+    // Find product in cart
+    const index = cart.products.findIndex(p => p.productId.toString() === productId);
+    if (index === -1) {
+      return res.status(404).json({ message: "Product not found in cart", messageType: "failure" });
+    }
+
+    // Decrease quantity or remove product
+    const product = cart.products[index];
+    if (product.quantity > 1) {
+      product.quantity -= 1;
+      product.total = product.quantity * product.price;
+    } else {
+      cart.products.splice(index, 1);
+    }
+
+    // Update total price
+    cart.totalPrice = cart.products.reduce((sum, p) => sum + p.total, 0);
+
+    await cart.save();
+
+    // Prepare response
+    const cartObj = cart.toObject();
+    const cartData = {
+      cartId: cartObj._id.toString(),
+      userId: cartObj.user.toString(),
+      restaurantId: cartObj.restaurantId,
+      products: cartObj.products,
+      totalPrice: cartObj.totalPrice,
+      createdAt: cartObj.createdAt,
+      updatedAt: cartObj.updatedAt,
+    };
+
+    return res.status(200).json({
+      message: "Product quantity updated successfully",
+      messageType: "success",
+      data: cartData
+    });
+
+  } catch (error) {
+    console.error("Error decreasing product quantity:", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      messageType: "failure"
+    });
+  }
+};
 
 
 exports.addToCartOneByOne = async (req, res) => {
