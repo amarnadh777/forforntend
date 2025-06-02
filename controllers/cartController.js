@@ -85,7 +85,102 @@ exports.addToCart = async (req, res) => {
     });
   }
 };
+exports.addToCartOneByOne = async (req, res) => {
+  const userId = req.user._id;
+  const { restaurantId, productId, quantity } = req.body;
 
+  try {
+    // Validate IDs
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw { status: 400, message: "Invalid userId format" };
+    }
+    if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+      throw { status: 400, message: "Invalid restaurantId format" };
+    }
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      throw { status: 400, message: "Invalid productId format" };
+    }
+
+    const productData = await Product.findById(productId);
+    if (!productData) {
+      throw { status: 404, message: "Product not found" };
+    }
+    if (productData.restaurantId.toString() !== restaurantId) {
+      throw { status: 400, message: "Product does not belong to the selected restaurant" };
+    }
+
+    let cart = await Cart.findOne({ user: userId });
+
+    // Create cart if it doesn't exist
+    if (!cart) {
+      cart = new Cart({
+        user: userId,
+        restaurantId,
+        products: []
+      });
+    } else if (cart.restaurantId.toString() !== restaurantId) {
+      // Clear cart if switching restaurant
+      cart.products = [];
+      cart.restaurantId = restaurantId;
+    }
+
+    const index = cart.products.findIndex(p => p.productId.toString() === productId);
+
+    if (quantity === 0) {
+      // Remove product if quantity is zero
+      if (index > -1) {
+        cart.products.splice(index, 1);
+      } else {
+        return res.status(400).json({
+          message: "Product not found in cart to remove",
+          messageType: "failure"
+        });
+      }
+    } else {
+      const newQty = quantity > 0 ? quantity : 1;
+      const price = productData.price;
+
+      if (index > -1) {
+        cart.products[index].quantity = newQty;
+        cart.products[index].total = newQty * price;
+      } else {
+        cart.products.push({
+          productId: productId,
+          name: productData.name,
+          price,
+          quantity: newQty,
+          total: newQty * price
+        });
+      }
+    }
+
+    // If no products left after update
+    if (cart.products.length === 0) {
+      await cart.deleteOne();
+      return res.status(200).json({
+        message: "Cart is now empty",
+        messageType: "success",
+        cart: null
+      });
+    }
+
+    cart.totalPrice = cart.products.reduce((sum, p) => sum + p.total, 0);
+    await cart.save();
+
+    return res.status(200).json({
+      message: "Cart updated successfully",
+      messageType: "success",
+      cart
+    });
+
+  } catch (error) {
+    console.error("Error inside addToCartOneByOne service:", error);
+    res.status(error.status || 500).json({
+      message: error.message || "Something went wrong",
+      messageType: "failure"
+    });
+  }
+};
 
 // Get user's cart
 exports.getCart = async (req, res) => {
