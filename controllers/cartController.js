@@ -274,11 +274,7 @@ exports.getCart = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const cart = await Cart.findOne({ user: userId })
-      .populate({
-        path: 'products.productId',
-        select: 'name description images foodType price'
-      });
+    const cart = await Cart.findOne({ user: userId });
 
     if (!cart) {
       return res.status(200).json({
@@ -288,20 +284,16 @@ exports.getCart = async (req, res) => {
       });
     }
 
-    // Map products to merge stored cart product info with latest product data if populated
-    const products = cart.products.map(item => {
-      const product = item.productId;
-      return {
-        productId: item.productId._id,
-        name: product.name,
-        description: product.description,
-        images: product.images,
-        foodType: product.foodType,
-        price: product.price,
-        quantity: item.quantity,
-        total: item.total
-      };
-    });
+    const products = cart.products.map(item => ({
+      productId: item.productId,
+      name: item.name,
+      description: item.description,
+      images: item.images,
+      foodType: item.foodType,
+      price: item.price,
+      quantity: item.quantity,
+      total: item.total
+    }));
 
     const cartData = {
       cartId: cart._id.toString(),
@@ -310,7 +302,7 @@ exports.getCart = async (req, res) => {
       products,
       totalPrice: cart.totalPrice,
       createdAt: cart.createdAt,
-      updatedAt: cart.updatedAt,
+      updatedAt: cart.updatedAt
     };
 
     res.status(200).json({
