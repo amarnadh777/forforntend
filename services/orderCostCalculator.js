@@ -1,6 +1,8 @@
 const { haversineDistance } = require("../utils/distanceCalculator");
-const {deliveryFeeCalculator} = require("../utils/deliveryFeeCalculator")
+const { deliveryFeeCalculator } = require("../utils/deliveryFeeCalculator");
 const TAX_PERCENTAGE = 5;
+
+const roundPrice = (num) => Math.round(num); // no decimals now
 
 exports.calculateOrderCost = ({ cartProducts, restaurant, userCoords, couponCode }) => {
   if (!cartProducts.length) throw new Error("Cart is empty");
@@ -13,16 +15,18 @@ exports.calculateOrderCost = ({ cartProducts, restaurant, userCoords, couponCode
     }
     subtotal += item.price * item.quantity;
   });
+  subtotal = roundPrice(subtotal);
 
   // Distance Calculation
   const restaurantCoords = restaurant.location.coordinates;
-  const distanceKm = haversineDistance(restaurantCoords, userCoords);
+  const distanceKm = haversineDistance(restaurantCoords, userCoords); // keep float for distance if you want km accuracy
 
   // Delivery Fee
-  const deliveryFee = deliveryFeeCalculator({
+  let deliveryFee = deliveryFeeCalculator({
     distanceKm,
     orderAmount: subtotal,
   });
+  deliveryFee = roundPrice(deliveryFee);
 
   // Coupon Discount
   let discount = 0;
@@ -35,13 +39,14 @@ exports.calculateOrderCost = ({ cartProducts, restaurant, userCoords, couponCode
       discount = coupon.value;
     }
   }
+  discount = roundPrice(discount);
 
   // Tax
   const taxableAmount = Math.max(subtotal - discount, 0);
-  const tax = (taxableAmount * TAX_PERCENTAGE) / 100;
+  const tax = roundPrice((taxableAmount * TAX_PERCENTAGE) / 100);
 
   // Final total
-  const total = taxableAmount + tax + deliveryFee;
+  const total = roundPrice(taxableAmount + tax + deliveryFee);
 
   return {
     subtotal,
@@ -49,6 +54,6 @@ exports.calculateOrderCost = ({ cartProducts, restaurant, userCoords, couponCode
     tax,
     deliveryFee,
     total,
-    distanceKm,
+    distanceKm: Math.round(distanceKm * 100) / 100, // keep 2 decimals for distance if needed
   };
 };

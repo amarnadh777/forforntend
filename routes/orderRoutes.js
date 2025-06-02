@@ -20,12 +20,20 @@ const {
   rescheduleOrder,
   merchantAcceptOrder,
   merchantRejectOrder,
+  placeOrder,
+  getOrderPriceSummary
  
   
 } = require('../controllers/orderController');
 
+const {protect} = require("../middlewares/authMiddleware")
 // orders
 router.post('/create', createOrder); // Create new order
+
+
+//place order 
+router.post("/place-order", protect, placeOrder)
+
 router.get('/', getAllOrders); // Admin - get all orders
 router.get('/:orderId', getOrderById); // Get specific order
 
@@ -56,6 +64,6 @@ router.put('/:orderId/merchant-accept',merchantAcceptOrder);
 router.put('/:orderId/merchant-reject',merchantRejectOrder)
 
 
-
+router.post("/pricesummary", protect, getOrderPriceSummary)
 
 module.exports = router;
