@@ -51,14 +51,17 @@ exports.addToCart = async (req, res) => {
         const price = productData.price;
 
         if (index > -1) {
-          // 👈 set new quantity directly
+          // update existing product
           cart.products[index].quantity = newQty;
           cart.products[index].total = newQty * price;
         } else {
-          // add as new product
+          // add new product with extended info
           cart.products.push({
             productId: prod.productId,
             name: productData.name,
+            description: productData.description,  // added
+            images: productData.images,            // added
+            foodType: productData.foodType,        // added
             price,
             quantity: newQty,
             total: price * newQty
@@ -101,6 +104,7 @@ exports.addToCart = async (req, res) => {
     });
   }
 };
+
 
 exports.decreaseProductQuantity = async (req, res) => {
   try {
@@ -266,12 +270,16 @@ exports.addToCartOneByOne = async (req, res) => {
   }
 };
 
-// Get user's cart
 exports.getCart = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const cart = await Cart.findOne({ user: userId });
+    const cart = await Cart.findOne({ user: userId })
+      .populate({
+        path: 'products.productId',
+        select: 'name description images foodType price'
+      });
+
     if (!cart) {
       return res.status(200).json({
         message: "Cart is empty",
@@ -280,11 +288,26 @@ exports.getCart = async (req, res) => {
       });
     }
 
+    // Map products to merge stored cart product info with latest product data if populated
+    const products = cart.products.map(item => {
+      const product = item.productId;
+      return {
+        productId: item.productId._id,
+        name: product.name,
+        description: product.description,
+        images: product.images,
+        foodType: product.foodType,
+        price: product.price,
+        quantity: item.quantity,
+        total: item.total
+      };
+    });
+
     const cartData = {
       cartId: cart._id.toString(),
       userId: cart.user.toString(),
       restaurantId: cart.restaurantId,
-      products: cart.products,
+      products,
       totalPrice: cart.totalPrice,
       createdAt: cart.createdAt,
       updatedAt: cart.updatedAt,
@@ -295,6 +318,7 @@ exports.getCart = async (req, res) => {
       messageType: "success",
       data: cartData
     });
+
   } catch (error) {
     console.error("Get Cart Error:", error);
     res.status(500).json({
