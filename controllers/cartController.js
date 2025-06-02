@@ -4,21 +4,25 @@ const { calculateOrderCost } = require("../services/orderCostCalculator");
 
 const mongoose = require('mongoose')
 
+
+
 exports.addToCart = async (req, res) => {
   const userId = req.user._id;
   const { restaurantId, products } = req.body;
 
   try {
+    // Validate input
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      throw { status: 400, message: "Invalid userId format" };
+      return res.status(400).json({ message: "Invalid userId format", messageType: "failure" });
     }
     if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
-      throw { status: 400, message: "Invalid restaurantId format" };
+      return res.status(400).json({ message: "Invalid restaurantId format", messageType: "failure" });
     }
     if (!products || !Array.isArray(products) || products.length === 0) {
-      throw { status: 400, message: "Products must be a non-empty array" };
+      return res.status(400).json({ message: "Products must be a non-empty array", messageType: "failure" });
     }
 
+    // Check for existing cart
     let cart = await Cart.findOne({ user: userId });
 
     if (!cart) {
@@ -28,11 +32,11 @@ exports.addToCart = async (req, res) => {
         products: []
       });
     } else if (cart.restaurantId.toString() !== restaurantId) {
-      // Clear existing products if switching restaurant
       cart.products = [];
       cart.restaurantId = restaurantId;
     }
 
+    // Process products
     for (const prod of products) {
       if (!prod.productId || !mongoose.Types.ObjectId.isValid(prod.productId)) continue;
 
@@ -42,12 +46,9 @@ exports.addToCart = async (req, res) => {
       const index = cart.products.findIndex(p => p.productId.toString() === prod.productId);
 
       if (prod.quantity === 0) {
-        // remove the product from cart
-        if (index > -1) {
-          cart.products.splice(index, 1);
-        }
+        if (index > -1) cart.products.splice(index, 1);
       } else {
-        const newQty = (prod.quantity && prod.quantity > 0) ? prod.quantity : 1;
+        const newQty = prod.quantity > 0 ? prod.quantity : 1;
         const price = productData.price;
 
         if (index > -1) {
@@ -66,25 +67,41 @@ exports.addToCart = async (req, res) => {
     }
 
     if (cart.products.length === 0) {
-      throw { status: 400, message: "No valid products found to add to cart" };
+      return res.status(400).json({ message: "No valid products found to add to cart", messageType: "failure" });
     }
 
     cart.totalPrice = cart.products.reduce((sum, p) => sum + p.total, 0);
     await cart.save();
 
+    // Prepare response data with renamed keys
+   const cartObj = cart.toObject();
+
+const cartData = {
+  cartId: cartObj._id.toString(),
+  userId: cartObj.user.toString(),
+  restaurantId: cartObj.restaurantId,
+  products: cartObj.products,
+  totalPrice: cartObj.totalPrice,
+  createdAt: cartObj.createdAt,
+  updatedAt: cartObj.updatedAt,
+};
+
     return res.status(200).json({
       message: "Cart updated successfully",
       messageType: "success",
-      data: cart
+      data: cartData
     });
+
   } catch (error) {
     console.error("Error inside addToCart service:", error);
-    res.status(error.status || 500).json({
+    return res.status(500).json({
       message: error.message || "Something went wrong",
       messageType: "failure"
     });
   }
 };
+
+
 exports.addToCartOneByOne = async (req, res) => {
   const userId = req.user._id;
   const { restaurantId, productId, quantity } = req.body;
@@ -192,14 +209,27 @@ exports.getCart = async (req, res) => {
       return res.status(200).json({
         message: "Cart is empty",
         messageType: "success",
-        data: { items: [] }
+        data: { products: [] }
       });
     }
+
+    // Convert mongoose document to plain object and rename keys
+    const cartObj = cart.toObject();
+
+    const cartData = {
+      cartId: cartObj._id.toString(),
+      userId: cartObj.user.toString(),
+      restaurantId: cartObj.restaurantId.toString(),
+      products: cartObj.products,
+      totalPrice: cartObj.totalPrice,
+      createdAt: cartObj.createdAt,
+      updatedAt: cartObj.updatedAt,
+    };
 
     res.status(200).json({
       message: "Cart fetched successfully",
       messageType: "success",
-      cart
+      data: cartData
     });
   } catch (error) {
     console.error("Get Cart Error:", error);

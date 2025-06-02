@@ -3,7 +3,7 @@ const { addToCart, getCart, updateCartItem, removeFromCart, clearCart,addMultipl
 const router = express.Router();
 const {protect} = require("../middlewares/authMiddleware")
 
-router.post('/add', protect,addToCartOneByOne);
+router.post('/add', protect,addToCart);
 router.get('/', protect, getCart);
 router.put('/update', updateCartItem);
 router.delete('/remove', removeFromCart);
