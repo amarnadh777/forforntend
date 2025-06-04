@@ -1,6 +1,7 @@
 
 const Restaurant = require("../models/restaurantModel")
 const Category = require("../models/categoryModel")
+const Product = require("../models/productModel")
 const { categories, restaurants } = require('../mockData')
 
 
@@ -54,7 +55,7 @@ exports.getNearbyRestaurants = async (req, res) => {
       });
     }
 
-    // Map response with category check
+    // Map response with category check and available foods
     const responseData = await Promise.all(restaurants.map(async (restaurant) => {
       const distanceKm = restaurant.location
         ? getDistanceFromLatLonInKm(
@@ -74,12 +75,30 @@ exports.getNearbyRestaurants = async (req, res) => {
       const categoryCount = await Category.countDocuments({restaurantId: restaurant._id });
       const isMenuAvailable = categoryCount > 0 ? "1" : "0";
 
+      // Get available food items for this restaurant
+      const availableFoods = await Product.find({
+        restaurantId: restaurant._id,
+        active: true,// Only items with stock > 0
+      })
+      .select('name price images foodType specialOffer')
+
+      // Format food items for frontend
+      const formattedFoods = availableFoods.map(food => ({
+        id: food._id,
+        name: food.name,
+        price: food.price,
+        image: food.images && food.images.length > 0 ? food.images[0] : null,
+        foodType: food.foodType,
+        discount: food.specialOffer?.discount || 0
+      }));
+
       return {
         shopName: restaurant.name,
         distance: distanceKm ? distanceKm.toFixed(2) : null,
         deliveryTime,
         merchantId: restaurant._id,
         isMenuAvailable,
+        availableFoods: formattedFoods, // Add available foods array
         image: {
           imageName:
             restaurant.images && restaurant.images.length > 0
@@ -106,7 +125,6 @@ exports.getNearbyRestaurants = async (req, res) => {
     });
   }
 };
-
 exports.getNearbyCategories = async (req, res) => {
   try {
     const { latitude, longitude, distance = 5000 } = req.query;

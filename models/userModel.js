@@ -1,37 +1,77 @@
 const mongoose = require("mongoose");
 
+const addressSchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      enum: ["Home", "Work", "Other"],
+      default: "Home",
+    },
+    displayName: {
+      type: String
+    },
+    street: String,
+    city: String,
+    state: String,
+    zip: String,
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point",
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        default: [0, 0],
+      },
+    },
+  },
+  { _id: true }
+);
+
+
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     phone: { type: String, required: true, unique: true },
     password: { type: String, required: true },
+
     userType: {
       type: String,
-      enum: ["customer", "agent", "merchant", "admin"],
+      enum: ["customer", "agent", "merchant", "admin", "superAdmin"], // Added superAdmin
       default: "customer",
       required: true,
     },
-    address: {
-      street: String,
-      city: String,
-      state: String,
-      zip: String,
-      location: {
-        type: {
-          type: String,
-          enum: ["Point"],
-          default: "Point"
-        },
-        coordinates: {
-          type: [Number],
-          default: [0, 0]
-        }
-      }
+
+    // Super Admin  Flag
+    isSuperAdmin: { type: Boolean, default: false },
+
+    //  Admin Permission System
+    adminPermissions: {
+      type: [String], // e.g. ['orders.manage', 'restaurants.approve']
+      default: [],
     },
+
+    isAgent: { type: Boolean, default: false },
+    agentApplicationStatus: {
+      type: String,
+      enum: ["none", "pending", "approved", "rejected"],
+      default: "none",
+    },
+    profilePicture: { type: String }, // Kept only one, removed duplicate
+    agentId: { type: mongoose.Schema.Types.ObjectId, ref: "Agent" },
+
+    agentApplicationDocuments: {
+      license: { type: String },
+      insurance: { type: String },
+      submittedAt: { type: Date },
+    },
+
+    addresses: [addressSchema], 
+
     active: { type: Boolean, default: true },
-    profilePicture: { type: String },
-    
+
     verification: {
       phoneOtp: String,
       emailOtp: String,
@@ -39,12 +79,6 @@ const userSchema = new mongoose.Schema(
       emailVerified: { type: Boolean, default: false },
       phoneVerified: { type: Boolean, default: false },
     },
-     loginOtp: {
-    type: String,
-  },
-  loginOtpExpiresAt: {
-    type: Date,
-  },
 
     bankDetails: {
       accountNumber: String,
@@ -75,24 +109,21 @@ const userSchema = new mongoose.Schema(
     ],
 
     deviceTokens: [String],
-
     lastActivity: Date,
 
-  resetPasswordToken: String,
-  resetPasswordExpires: Date,
-  forgotPasswordOtpVerified: {
-  type: Boolean,
-  default: false,
-},
+    resetPasswordToken: String,
+    resetPasswordExpires: Date,
+
+    
+
     loginAttempts: {
       count: { type: Number, default: 0 },
       lastAttempt: Date,
     },
+
+
   },
   { timestamps: true }
 );
-
-
-
 
 module.exports = mongoose.model("User", userSchema);

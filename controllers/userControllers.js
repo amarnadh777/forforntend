@@ -4,6 +4,8 @@ const jwt = require("jsonwebtoken");
 const otpGenerator = require("../utils/otpGenerator");
 const { sendEmail } = require("../utils/sendEmail");
 const { sendSms } = require("../utils/sendSms");
+const Favourite = require("../models/favouriteModel")
+const Restaurant = require("../models/restaurantModel")
 
 // Register user with validations, OTP generation and notifications
 exports.registerUser = async (req, res) => {
@@ -141,6 +143,93 @@ exports.verifyOtp = async (req, res) => {
   }
 };
 
+
+exports.getUserDetails = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required",
+        messageType: "failure"
+      });
+    }
+
+    // Fetch user by ID — exclude sensitive fields like password and reset tokens
+    const user = await User.findById(userId)
+      .select('-password -resetPasswordToken -resetPasswordExpires')
+      .lean(); // lean() returns plain JS object instead of Mongoose document
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+        messageType: "failure"
+      });
+    }
+
+    // Prepare addresses with proper lat-lon formatting
+    const formattedAddresses = (user.addresses || []).map(addr => {
+      let lat = null;
+      let lon = null;
+
+      if (addr.location && Array.isArray(addr.location.coordinates)) {
+        [lon, lat] = addr.location.coordinates;
+      }
+
+      return {
+        addressId: addr._id,
+        type: addr.type || null,
+        street: addr.street || null,
+        city: addr.city || null,
+        state: addr.state || null,
+        zip: addr.zip || null,
+        location: {
+          latitude: lat,
+          longitude: lon
+        }
+      };
+    });
+
+    // Build final response object
+    const userDetails = {
+      userId: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      userType: user.userType,
+      profilePicture: user.profilePicture,
+      walletBalance: user.walletBalance,
+      loyaltyPoints: user.loyaltyPoints,
+      addresses: formattedAddresses,
+      deviceTokens: user.deviceTokens,
+      lastActivity: user.lastActivity,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    };
+
+    // Send success response
+    return res.status(200).json({
+      success: true,
+      message: "User details fetched successfully",
+      messageType: "success",
+      data: userDetails
+    });
+
+  } catch (error) {
+    console.error("Error fetching user details:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong on the server",
+      messageType: "failure"
+    });
+  }
+};
+
+
+
+
 exports.loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -202,7 +291,8 @@ exports.loginUser = async (req, res) => {
 
 exports.addAddress = async (req, res) => {
   try {
-    const { street, city, state, zip, longitude, latitude, userId } = req.body;
+    const { userId, type, street, city, state, zip, longitude, latitude } =
+      req.body;
 
     if (
       !street ||
@@ -213,106 +303,290 @@ exports.addAddress = async (req, res) => {
       !latitude ||
       !userId
     ) {
-      return res.status(400).json({ message: "All fields are required" });
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+        messageType: "failure"
+      });
     }
 
     const userExist = await User.findById(userId);
     if (!userExist) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+        messageType: "failure"
+      });
     }
 
-    userExist.address = {
+    if (!userExist.addresses) {
+      userExist.addresses = [];
+    }
+
+    userExist.addresses.push({
+      type, // Home / Work / Other
       street,
       city,
       state,
       zip,
       location: {
-        type: "Point", // ✅ Important for GeoJSON!
+        type: "Point",
         coordinates: [parseFloat(longitude), parseFloat(latitude)],
       },
-    };
+    });
 
     await userExist.save();
 
-    res.json({ message: "Address updated successfully" });
+    return res.status(200).json({
+      success: true,
+      message: "Address added successfully",
+      messageType: "success",
+      data: {
+        addresses: userExist.addresses,
+      },
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong on the server",
+      messageType: "failure"
+    });
   }
-};
-
-exports.deleteAddressById = async (req, res) => {
+};exports.deleteAddressById = async (req, res) => {
   try {
-    const { userId, addressId } = req.params;
+    const userId = req.user._id;
+    const { addressId } = req.params;
 
-    // Find the user by userId
+    // Validate essentials
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "userId is required",
+        messageType: "failure"
+      });
+    }
+
+    // Find the user
     const userExist = await User.findById(userId);
     if (!userExist) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+        messageType: "failure"
+      });
     }
 
-    // Check if the user has the specified addressId
-    const addressExists = userExist.address.id(addressId); // If it's a subdocument (array of addresses)
+    // Check if address exists
+    const addressExists = userExist.addresses.id(addressId);
     if (!addressExists) {
-      return res.status(404).json({ message: "Address not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Address not found",
+        messageType: "failure"
+      });
     }
 
-    // Remove the address
-    userExist.address.id(addressId).remove();
+    // Remove the address using pull
+    userExist.addresses.pull({ _id: addressId });
 
     // Save the updated user
     await userExist.save();
 
-    res.json({ message: "Address deleted successfully" });
+    // Prepare updated addresses
+    const updatedAddresses = (userExist.addresses || []).map(addr => {
+      let lat = null;
+      let lon = null;
+
+      if (addr.location && Array.isArray(addr.location.coordinates)) {
+        [lon, lat] = addr.location.coordinates;
+      }
+
+      return {
+        addressId: addr._id,
+        type: addr.type || null,
+        street: addr.street || null,
+        city: addr.city || null,
+        state: addr.state || null,
+        zip: addr.zip || null,
+        location: {
+          latitude: lat,
+          longitude: lon
+        }
+      };
+    });
+
+    // Success response
+    return res.status(200).json({
+      success: true,
+      message: "Address deleted successfully",
+      messageType: "success",
+      data: updatedAddresses
+    });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error("Error deleting address:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong on the server",
+      messageType: "failure"
+    });
+  }
+};
+
+exports.getAddress = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "userId is required",
+        messageType: "failure"
+      });
+    }
+
+    const userExist = await User.findById(userId);
+
+    if (!userExist) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+        messageType: "failure"
+      });
+    }
+
+    // Map addresses safely to include latitude & longitude if available
+    const formattedAddresses = (userExist.addresses || []).map(address => {
+      let latitude = null;
+      let longitude = null;
+
+      if (address.location && Array.isArray(address.location.coordinates)) {
+        [longitude, latitude] = address.location.coordinates;
+      }
+
+      return {
+        addressId: address._id,
+        type: address.type || null,
+        street: address.street || null,
+        city: address.city || null,
+        state: address.state || null,
+        zip: address.zip || null,
+        location: {
+          latitude,
+          longitude
+        }
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Addresses fetched successfully",
+      messageType: "success",
+      data: formattedAddresses
+    });
+
+  } catch (error) {
+    console.error("Error fetching addresses:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong on the server",
+      messageType: "failure"
+    });
   }
 };
 
 exports.updateAddressById = async (req, res) => {
   try {
-    const { userId, addressId } = req.params; // Extract userId and addressId from request params
-    const { street, city, state, zip, longitude, latitude } = req.body; // Extract address fields from request body
+    const { addressId } = req.params;
+    const { userId, street, city, state, zip, longitude, latitude } = req.body;
 
-    // Validate the required fields
-    if (!street || !city || !state || !zip || !longitude || !latitude) {
-      return res
-        .status(400)
-        .json({ message: "All address fields are required" });
+    // Validate essentials
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "userId is required",
+        messageType: "failure"
+      });
     }
 
-    // Find the user by userId
+    // Find the user
     const userExist = await User.findById(userId);
     if (!userExist) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+        messageType: "failure"
+      });
     }
 
-    // Find the address by addressId within the user's address subdocument
-    const address = userExist.address.id(addressId);
+    // Find the address
+    const address = userExist.addresses.id(addressId);
     if (!address) {
-      return res.status(404).json({ message: "Address not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Address not found",
+        messageType: "failure"
+      });
     }
 
-    // Update the address fields
-    address.street = street;
-    address.city = city;
-    address.state = state;
-    address.zip = zip;
-    address.location = {
-      type: "Point", // Required for GeoJSON
-      coordinates: [parseFloat(longitude), parseFloat(latitude)], // Ensure coordinates are floats
-    };
+    // Update only provided fields
+    if (street !== undefined) address.street = street;
+    if (city !== undefined) address.city = city;
+    if (state !== undefined) address.state = state;
+    if (zip !== undefined) address.zip = zip;
 
-    // Save the updated user document
+    if (longitude !== undefined && latitude !== undefined) {
+      address.location = {
+        type: "Point",
+        coordinates: [parseFloat(longitude), parseFloat(latitude)]
+      };
+    }
+
+    // Save updated user document
     await userExist.save();
 
-    res.json({ message: "Address updated successfully" });
+    // Format updated addresses
+    const updatedAddresses = (userExist.addresses || []).map(addr => {
+      let lat = null;
+      let lon = null;
+
+      if (addr.location && Array.isArray(addr.location.coordinates)) {
+        [lon, lat] = addr.location.coordinates;
+      }
+
+      return {
+        addressId: addr._id,
+        type: addr.type || null,
+        street: addr.street || null,
+        city: addr.city || null,
+        state: addr.state || null,
+        zip: addr.zip || null,
+        location: {
+          latitude: lat,
+          longitude: lon
+        }
+      };
+    });
+
+    // Success response
+    return res.status(200).json({
+      success: true,
+      message: "Address updated successfully",
+      messageType: "success",
+      data: updatedAddresses
+    });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error("Error updating address:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong on the server",
+      messageType: "failure"
+    });
   }
 };
+
 // Resend new OTPs
 exports.resendOtp = async (req, res) => {
   try {
@@ -656,3 +930,103 @@ exports.verifyLoginOtp = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+exports.addFavouriteRestaurant = async (req, res) => {
+  try {
+    const { restaurantId } = req.body;
+    const userId = req.user._id; // Assuming JWT middleware sets req.user
+
+    if (!restaurantId) {
+      return res.status(400).json({ message: 'restaurantId is required', messageType: "failure" });
+    }
+
+    // Check if restaurant exists
+    const restaurant = await Restaurant.findById(restaurantId);
+    if (!restaurant) {
+      return res.status(404).json({ message: 'Restaurant not found', messageType: "failure" });
+    }
+
+    // Check if already added to favourites
+    const alreadyFavourite = await Favourite.findOne({ user: userId, item: restaurantId, itemType: 'Restaurant' });
+    if (alreadyFavourite) {
+      return res.status(400).json({ message: 'Restaurant already in favourites', messageType: "failure" });
+    }
+
+    // Add to favourites
+    const newFavourite = new Favourite({
+      user: userId,
+      item: restaurantId,
+      itemType: 'Restaurant'  // IMPORTANT: set this to 'Restaurant'
+    });
+
+    await newFavourite.save();
+
+    res.status(201).json({ message: 'Added to favourites successfully', messageType: "success", data: newFavourite });
+
+  } catch (error) {
+    console.error('Error adding favourite:', error);
+    res.status(500).json({ message: 'Internal Server Error', messageType: "failure" });
+  }
+};
+
+
+
+exports.removeFavouriteRestaurant = async (req, res) => {
+  try {
+    const { restaurantId } = req.body;
+    const userId = req.user._id; // Assuming JWT middleware sets req.user
+
+    if (!restaurantId) {
+      return res.status(400).json({ message: 'restaurantId is required', messageType: "failure" });
+    }
+
+    // Find and delete the favourite entry
+    const deleted = await Favourite.findOneAndDelete({
+      user: userId,
+      item: restaurantId,
+      itemType: 'Restaurant'
+    });
+
+    if (!deleted) {
+      return res.status(404).json({ message: 'Favourite restaurant not found', messageType: "failure" });
+    }
+
+    res.status(200).json({ message: 'Removed from favourites successfully', messageType: "success" });
+
+  } catch (error) {
+    console.error('Error removing favourite:', error);
+    res.status(500).json({ message: 'Internal Server Error', messageType: "failure" });
+  }
+};
+
+
+exports.getFavouriteRestaurants = async (req, res) => {
+  try {
+    const userId = req.user._id; // Assuming JWT middleware sets req.user
+
+    // Find favourites for user where itemType is 'Restaurant' and populate restaurant details
+    const favourites = await Favourite.find({ user: userId, itemType: 'Restaurant' })
+      .populate('item', 'name location cuisine rating images') // select restaurant fields you want
+      .exec();
+
+    // Map to return only the restaurant data inside favourites
+    const favouriteRestaurants = favourites.map(fav => fav.item);
+
+    res.status(200).json({ 
+      message: 'Favourite restaurants fetched successfully',
+      messageType: "success",
+      data: favouriteRestaurants 
+    });
+
+  } catch (error) {
+    console.error('Error fetching favourites:', error);
+    res.status(500).json({ message: 'Internal Server Error', messageType: "failure" });
+  }
+};
+
+
+

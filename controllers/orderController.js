@@ -3,6 +3,7 @@ const Cart = require("../models/cartModel")
 const Restaurant = require("../models/restaurantModel")
 const { calculateOrderCost} = require("../services/orderCostCalculator")
 // Create Orderconst Product = require("../models/FoodItem"); // Your product model
+
 const Product = require("../models/productModel")
 exports.createOrder = async (req, res) => {
   try {
@@ -695,7 +696,7 @@ exports.updateOrderStatus = async (req, res) => {
 exports.getOrderPriceSummary = async (req, res) => {
   try {
     const { longitude, latitude, couponCode, cartId, userId } = req.body;
-    console.log("r")
+
 
     if (!cartId || !userId) {
       return res.status(400).json({ message: "cartId and userId are required", messageType: "failure" });
@@ -740,6 +741,91 @@ exports.getOrderPriceSummary = async (req, res) => {
     res.status(500).json({ message: "server error", messageType: "failure" });
   }
 };
+
+
+
+exports.getOrderPriceSummaryByaddressId = async (req, res) => {
+  try {
+    const { addressId, couponCode, cartId, userId } = req.body;
+
+    if (!cartId || !userId || !addressId) {
+      return res.status(400).json({ 
+        message: "cartId, userId, and addressId are required", 
+        messageType: "failure" 
+      });
+    }
+
+    // Find user and their address
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ 
+        message: "User not found", 
+        messageType: "failure" 
+      });
+    }
+
+    // Find the specific address
+    const address = user.addresses.id(addressId);
+    if (!address || !address.location || !address.location.coordinates) {
+      return res.status(404).json({ 
+        message: "Address not found or invalid location data", 
+        messageType: "failure" 
+      });
+    }
+
+    const cart = await Cart.findOne({ _id: cartId, user: userId });
+    if (!cart) {
+      return res.status(404).json({ 
+        message: "Cart not found for this user", 
+        messageType: "failure" 
+      });
+    }
+
+    if (!cart.products || cart.products.length === 0) {
+      return res.status(400).json({ 
+        message: "Cart is empty", 
+        messageType: "failure" 
+      });
+    }
+
+    const restaurant = await Restaurant.findById(cart.restaurantId);
+    if (!restaurant) {
+      return res.status(404).json({ 
+        message: "Restaurant not found", 
+        messageType: "failure" 
+      });
+    }
+
+    // Use coordinates from the address
+    const userCoords = address.location.coordinates; // [longitude, latitude]
+
+    const costSummary = calculateOrderCost({
+      cartProducts: cart.products,
+      restaurant,
+      userCoords,
+      couponCode,
+    });
+
+    // Convert all values to string
+    const stringSummary = Object.fromEntries(
+      Object.entries(costSummary).map(([key, value]) => [key, value.toString()])
+    );
+
+    return res.status(200).json({
+      message: "Bill summary calculated successfully",
+      messageType: "success",
+      data: stringSummary,
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ 
+      message: "Server error", 
+      messageType: "failure" 
+    });
+  }
+};
+
 
 
 
