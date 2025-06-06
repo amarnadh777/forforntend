@@ -98,6 +98,7 @@ exports.getNearbyRestaurants = async (req, res) => {
         deliveryTime,
         merchantId: restaurant._id,
         isMenuAvailable,
+        isAvailable:"0",
         availableFoods: formattedFoods, // Add available foods array
         image: {
           imageName:

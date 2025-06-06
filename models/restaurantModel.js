@@ -17,6 +17,7 @@ const restaurantSchema = new mongoose.Schema(
       zip: String,
      
     },
+    password: { type: String, required: true, select: false },
      location: {
         type: { type: String, enum: ["Point"], default: "Point" },
         coordinates: { type: [Number], default: [0, 0] }, // [lng, lat]

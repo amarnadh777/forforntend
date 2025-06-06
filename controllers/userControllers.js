@@ -291,7 +291,8 @@ exports.loginUser = async (req, res) => {
 
 exports.addAddress = async (req, res) => {
   try {
-    const { userId, type, street, city, state, zip, longitude, latitude } =
+    const userId = req.user._id;
+    const { type, street, city, state, zip, longitude, latitude } =
       req.body;
 
     if (
@@ -436,7 +437,7 @@ exports.addAddress = async (req, res) => {
 
 exports.getAddress = async (req, res) => {
   try {
-    const { userId } = req.params;
+       const userId = req.user._id;
 
     if (!userId) {
       return res.status(400).json({
@@ -483,7 +484,7 @@ exports.getAddress = async (req, res) => {
       success: true,
       message: "Addresses fetched successfully",
       messageType: "success",
-      data: formattedAddresses
+      Addresses: formattedAddresses
     });
 
   } catch (error) {
@@ -498,8 +499,8 @@ exports.getAddress = async (req, res) => {
 
 exports.updateAddressById = async (req, res) => {
   try {
-    const { addressId } = req.params;
-    const { userId, street, city, state, zip, longitude, latitude } = req.body;
+   const userId = req.user._id;
+    const { street, city, state, zip, longitude, latitude } = req.body;
 
     // Validate essentials
     if (!userId) {

@@ -15,11 +15,10 @@ router.post("/verify-otp", verifyOtp);
 router.post("/resend-otp", resendOtp);
 router.post("/login", loginUser);
 
-router.get("/details",protect ,getUserDetails)
-router.post("/address",addAddress)
-router.put("/address/:addressId",updateAddressById)
+router.post("/address",protect,addAddress)
+router.put("/address/:addressId",protect,updateAddressById)
 router.delete("/address/:addressId",protect,deleteAddressById)
-router.get("/adderss/:userId",getAddress)
+router.get("/adderss/:userId",protect,getAddress)
 router.post("/forgot-password",forgotPassword)
 router.post("/forgot-password/verify-otp", verifyForgotPasswordOtp);
 router.post("/reset-password",resetPassword)
