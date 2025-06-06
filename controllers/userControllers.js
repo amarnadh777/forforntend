@@ -291,26 +291,19 @@ exports.loginUser = async (req, res) => {
 
 exports.addAddress = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const { type, street, city, state, zip, longitude, latitude } =
-      req.body;
+    const userId = req.user?._id || req.body?.userId;
+    const { type, street, city, state, zip, longitude, latitude, displayName } = req.body;
 
-    if (
-      !street ||
-      !city ||
-      !state ||
-      !zip ||
-      !longitude ||
-      !latitude ||
-      !userId
-    ) {
+    // Validate required fields
+    if (!street || !city || !state || !zip || !longitude || !latitude || !userId) {
       return res.status(400).json({
         success: false,
-        message: "All fields are required",
+        message: "All required fields are missing",
         messageType: "failure"
       });
     }
 
+    // Check if user exists
     const userExist = await User.findById(userId);
     if (!userExist) {
       return res.status(404).json({
@@ -320,22 +313,27 @@ exports.addAddress = async (req, res) => {
       });
     }
 
+    // Initialize addresses array if it doesn't exist
     if (!userExist.addresses) {
       userExist.addresses = [];
     }
 
-    userExist.addresses.push({
-      type, // Home / Work / Other
+    // Create new address object
+    const newAddress = {
+      type, // Home/Work/Other
       street,
       city,
       state,
       zip,
+      displayName:displayName, // Optional display name for the address
       location: {
         type: "Point",
         coordinates: [parseFloat(longitude), parseFloat(latitude)],
       },
-    });
+    };
 
+    // Add the new address
+    userExist.addresses.push(newAddress);
     await userExist.save();
 
     return res.status(200).json({
@@ -350,11 +348,12 @@ exports.addAddress = async (req, res) => {
     console.error(error);
     return res.status(500).json({
       success: false,
-      message: "Something went wrong on the server",
+      message: "Internal server error",
       messageType: "failure"
     });
   }
-};exports.deleteAddressById = async (req, res) => {
+};
+exports.deleteAddressById = async (req, res) => {
   try {
     const userId = req.user._id;
     const { addressId } = req.params;
