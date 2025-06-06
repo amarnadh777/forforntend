@@ -472,6 +472,7 @@ exports.getAddress = async (req, res) => {
         city: address.city || null,
         state: address.state || null,
         zip: address.zip || null,
+        displayName:address.displayName || null,
         location: {
           latitude,
           longitude
