@@ -7,6 +7,7 @@ const { calculateOrderCost} = require("../services/orderCostCalculator")
 const mongoose = require("mongoose")
 const Product = require("../models/productModel")
 const  restaurantService = require("../services/restaurantService")
+const productService = require("../services/productService")
 
 exports.createOrder = async (req, res) => {
   try {
@@ -925,9 +926,8 @@ exports.getOrderPriceSummaryByaddressId = async (req, res) => {
 
 exports.getPastOrders = async (req, res) => {
   try {
-    const { userId } = req.body;
-    
-    // Validate user ID
+    const userId = req.user._id;
+
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: "0",
@@ -936,13 +936,14 @@ exports.getPastOrders = async (req, res) => {
       });
     }
 
-    // Query only delivered or canceled orders
     const pastOrders = await Order.find({
       customerId: userId,
       orderStatus: { $in: ['completed', 'cancelled_by_customer', 'rejected_by_restaurant'] }
     })
     .sort({ orderTime: -1 })
-    .populate('restaurantId', 'name logo')
+    .populate('restaurantId', 'name images').populate('orderItems.productId', 'name image price');
+
+    console.log(pastOrders)
 
     if (!pastOrders || pastOrders.length === 0) {
       return res.json({
@@ -954,26 +955,38 @@ exports.getPastOrders = async (req, res) => {
       });
     }
 
-    // Get unique restaurant IDs from all orders
+    // Get unique restaurant IDs
     const restaurantIds = [...new Set(pastOrders.map(order => order.restaurantId._id.toString()))];
-    
-    // Check availability status for all restaurants at once
-    const availabilityPromises = restaurantIds.map(restaurantId => 
-       restaurantService.checkStatus(restaurantId)
+
+    const availabilityPromises = restaurantIds.map(restaurantId =>
+      restaurantService.checkStatus(restaurantId)
     );
     const availabilityResults = await Promise.all(availabilityPromises);
-    
-    // Create a map of restaurantId to availability status
+
     const restaurantAvailability = {};
     restaurantIds.forEach((id, index) => {
       restaurantAvailability[id] = availabilityResults[index];
     });
 
-    // Format the response with all values as strings
-    const formattedOrders = pastOrders.map(order => {
+    const formattedOrders = await Promise.all(pastOrders.map(async (order) => {
       const availability = restaurantAvailability[order.restaurantId._id.toString()] || {};
       const deliveryAddress = order.deliveryAddress || {};
-      
+
+      const itemsWithAvailability = await Promise.all(
+        order.orderItems.map(async (item) => {
+          const productAvailability = await productService.checkProductAvailability(item.productId?._id);
+          return {
+            productId: item.productId?._id ? item.productId._id.toString() : "null",
+            name: item.productId?.name ? String(item.productId.name) : "null",
+            image: item.productId?.image ? String(item.productId.image) : "null",
+            quantity: item.quantity ? String(item.quantity) : "0",
+            price: item.price ? String(item.price) : "0",
+            isAvailableNow: productAvailability.isAvailable ? "1" : "0",
+            unavailableReason: productAvailability.reason || null
+          };
+        })
+      );
+
       return {
         orderId: order._id.toString(),
         restaurant: {
@@ -988,13 +1001,7 @@ exports.getPastOrders = async (req, res) => {
         deliveryTime: order.deliveryTime ? order.deliveryTime.toISOString() : "null",
         status: order.orderStatus ? String(order.orderStatus) : "null",
         cancellationReason: order.cancellationReason ? String(order.cancellationReason) : "null",
-        items: order.orderItems ? order.orderItems.map(item => ({
-          productId: item.productId?._id ? item.productId._id.toString() : "null",
-          name: item.productId?.name ? String(item.productId.name) : "null",
-          image: item.productId?.image ? String(item.productId.image) : "null",
-          quantity: item.quantity ? String(item.quantity) : "0",
-          price: item.price ? String(item.price) : "0"
-        })) : [],
+        items: itemsWithAvailability,
         totalAmount: order.totalAmount ? String(order.totalAmount) : "0",
         deliveryCharge: order.deliveryCharge ? String(order.deliveryCharge) : "0",
         distanceKm: order.distanceKm ? String(order.distanceKm) : "0",
@@ -1006,7 +1013,7 @@ exports.getPastOrders = async (req, res) => {
           country: deliveryAddress.country ? String(deliveryAddress.country) : "null"
         }
       };
-    });
+    }));
 
     res.json({
       success: "1",

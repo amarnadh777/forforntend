@@ -69,6 +69,6 @@ router.post("/pricesummary", protect, getOrderPriceSummary)
 
 router.post("/pricesummary/:addessId", protect,getOrderPriceSummaryByaddressId)
 
-router.get("/customer/orders",getPastOrders)
+router.get("/customer/orders", protect,getPastOrders)
 
 module.exports = router;
