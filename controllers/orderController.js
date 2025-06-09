@@ -4,8 +4,10 @@ const Restaurant = require("../models/restaurantModel")
 const User = require("../models/userModel")
 const { calculateOrderCost} = require("../services/orderCostCalculator")
 // Create Orderconst Product = require("../models/FoodItem"); // Your product model
-
+const mongoose = require("mongoose")
 const Product = require("../models/productModel")
+const  restaurantService = require("../services/restaurantService")
+
 exports.createOrder = async (req, res) => {
   try {
     const { customerId, restaurantId, orderItems, paymentMethod, location } = req.body;
@@ -918,6 +920,111 @@ exports.getOrderPriceSummaryByaddressId = async (req, res) => {
   }
 };
 
+
+// Get user's past delivered and canceled orders
+
+exports.getPastOrders = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    // Validate user ID
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: "0",
+        message: 'Invalid user ID',
+        messageType: "failure"
+      });
+    }
+
+    // Query only delivered or canceled orders
+    const pastOrders = await Order.find({
+      customerId: userId,
+      orderStatus: { $in: ['completed', 'cancelled_by_customer', 'rejected_by_restaurant'] }
+    })
+    .sort({ orderTime: -1 })
+    .populate('restaurantId', 'name logo')
+
+    if (!pastOrders || pastOrders.length === 0) {
+      return res.json({
+        success: "1",
+        message: 'No past orders found',
+        messageType: "success",
+        count: "0",
+        orders: []
+      });
+    }
+
+    // Get unique restaurant IDs from all orders
+    const restaurantIds = [...new Set(pastOrders.map(order => order.restaurantId._id.toString()))];
+    
+    // Check availability status for all restaurants at once
+    const availabilityPromises = restaurantIds.map(restaurantId => 
+       restaurantService.checkStatus(restaurantId)
+    );
+    const availabilityResults = await Promise.all(availabilityPromises);
+    
+    // Create a map of restaurantId to availability status
+    const restaurantAvailability = {};
+    restaurantIds.forEach((id, index) => {
+      restaurantAvailability[id] = availabilityResults[index];
+    });
+
+    // Format the response with all values as strings
+    const formattedOrders = pastOrders.map(order => {
+      const availability = restaurantAvailability[order.restaurantId._id.toString()] || {};
+      const deliveryAddress = order.deliveryAddress || {};
+      
+      return {
+        orderId: order._id.toString(),
+        restaurant: {
+          id: order.restaurantId._id.toString(),
+          name: order.restaurantId.name ? String(order.restaurantId.name) : "null",
+          logo: order.restaurantId.logo ? String(order.restaurantId.logo) : "null",
+          isAvailable: availability.isAvailable ? "1" : "0",
+          nonAvailabilityReason: availability.nonAvailabilityReason || null,
+          nextOpeningTime: availability.nextOpeningTime || null
+        },
+        orderTime: order.orderTime ? order.orderTime.toISOString() : "null",
+        deliveryTime: order.deliveryTime ? order.deliveryTime.toISOString() : "null",
+        status: order.orderStatus ? String(order.orderStatus) : "null",
+        cancellationReason: order.cancellationReason ? String(order.cancellationReason) : "null",
+        items: order.orderItems ? order.orderItems.map(item => ({
+          productId: item.productId?._id ? item.productId._id.toString() : "null",
+          name: item.productId?.name ? String(item.productId.name) : "null",
+          image: item.productId?.image ? String(item.productId.image) : "null",
+          quantity: item.quantity ? String(item.quantity) : "0",
+          price: item.price ? String(item.price) : "0"
+        })) : [],
+        totalAmount: order.totalAmount ? String(order.totalAmount) : "0",
+        deliveryCharge: order.deliveryCharge ? String(order.deliveryCharge) : "0",
+        distanceKm: order.distanceKm ? String(order.distanceKm) : "0",
+        deliveryAddress: {
+          street: deliveryAddress.street ? String(deliveryAddress.street) : "null",
+          city: deliveryAddress.city ? String(deliveryAddress.city) : "null",
+          state: deliveryAddress.state ? String(deliveryAddress.state) : "null",
+          pincode: deliveryAddress.pincode ? String(deliveryAddress.pincode) : "null",
+          country: deliveryAddress.country ? String(deliveryAddress.country) : "null"
+        }
+      };
+    });
+
+    res.json({
+      success: "1",
+      message: 'Past orders retrieved successfully',
+      messageType: "success",
+      count: pastOrders.length.toString(),
+      orders: formattedOrders
+    });
+
+  } catch (error) {
+    console.error('Error fetching past orders:', error);
+    res.status(500).json({
+      success: "0",
+      message: 'Internal server error',
+      messageType: "failure"
+    });
+  }
+};
 
 
 
