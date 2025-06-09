@@ -943,7 +943,7 @@ exports.getPastOrders = async (req, res) => {
     .sort({ orderTime: -1 })
     .populate('restaurantId', 'name images').populate('orderItems.productId', 'name image price');
 
-    console.log(pastOrders)
+  
 
     if (!pastOrders || pastOrders.length === 0) {
       return res.json({
@@ -992,7 +992,7 @@ exports.getPastOrders = async (req, res) => {
         restaurant: {
           id: order.restaurantId._id.toString(),
           name: order.restaurantId.name ? String(order.restaurantId.name) : "null",
-          logo: order.restaurantId.logo ? String(order.restaurantId.logo) : "null",
+          images: order.restaurantId.images ? String(order.restaurantId.images) : "null",
           isAvailable: availability.isAvailable ? "1" : "0",
           nonAvailabilityReason: availability.nonAvailabilityReason || null,
           nextOpeningTime: availability.nextOpeningTime || null
