@@ -372,24 +372,27 @@ exports.getOrdersByCustomer = async (req, res) => {
     }));
 
     res.json({
-      success: true,
-      count: orders.length,
-      data: transformedOrders,
-      pagination: {
-        total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit)
-      }
-    });
+  success: true,
+  messageType: "success",
+  message: "Orders fetched successfully",
+  count: orders.length,
+  data: transformedOrders,
+  pagination: {
+    total,
+    page,
+    limit,
+    pages: Math.ceil(total / limit)
+  }
+})
 
   } catch (err) {
     console.error('Error fetching orders:', err);
-    res.status(500).json({ 
-      success: false,
-      error: "Failed to fetch orders",
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
+  res.status(500).json({ 
+  success: false,
+  messageType: "failure",
+  message: "Failed to fetch orders",
+  error: process.env.NODE_ENV === 'development' ? err.message : undefined
+});
   }
 };
 
