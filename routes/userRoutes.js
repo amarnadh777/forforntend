@@ -15,7 +15,7 @@ router.post("/verify-otp", verifyOtp);
 router.post("/resend-otp", resendOtp);
 router.post("/login", loginUser);
 
-router.post("/address",protect,addAddress)
+router.post("/address",addAddress)
 router.put("/address/:addressId",protect,updateAddressById)
 router.delete("/address/:addressId",protect,deleteAddressById)
 router.get("/adderss/:userId",protect,getAddress)
@@ -29,6 +29,10 @@ router.post("/login-otp/verify",verifyLoginOtp)
 router.post("/fav/restaurants",protect,addFavouriteRestaurant)
 router.get("/fav/restaurants",protect,getFavouriteRestaurants)
 router.put('/fav/restaurants/remove',protect,removeFavouriteRestaurant);
+
+
+
+
 
 
 module.exports = router;

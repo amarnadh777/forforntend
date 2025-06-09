@@ -1,6 +1,7 @@
 const Order = require("../models/orderModel");
 const Cart = require("../models/cartModel")
 const Restaurant = require("../models/restaurantModel")
+const User = require("../models/userModel")
 const { calculateOrderCost} = require("../services/orderCostCalculator")
 // Create Orderconst Product = require("../models/FoodItem"); // Your product model
 
@@ -296,12 +297,99 @@ exports.getOrderById = async (req, res) => {
 };
 
 // Get Orders by Customer
+// Get Orders by Customer with pagination and better response structure
 exports.getOrdersByCustomer = async (req, res) => {
   try {
-    const orders = await Order.find({ customerId: req.params.customerId });
-    res.json(orders);
+    const customerId = req.user._id;
+    
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Status filter if provided
+    const statusFilter = req.query.status 
+      ? { orderStatus: req.query.status } 
+      : {};
+
+    // Get orders with pagination
+    const [orders, total] = await Promise.all([
+      Order.find({ customerId, ...statusFilter })
+        .populate("restaurantId", "name location address images")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Order.countDocuments({ customerId, ...statusFilter })
+    ]);
+
+    // Transform the orders data
+    const transformedOrders = orders.map(order => ({
+      orderId: order._id,
+      customerId: order.customerId,
+      restaurant: {
+        id: order.restaurantId._id,
+        name: order.restaurantId.name,
+        image: order.restaurantId.images?.[0],
+        location: order.restaurantId.location,
+        address: order.restaurantId.address
+      },
+      items: order.orderItems.map(item => ({
+        id: item.productId,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        totalPrice: item.totalPrice,
+        image: item.image
+      })),
+      delivery: {
+        address: order.deliveryAddress,
+        location: order.deliveryLocation,
+        distanceKm: order.distanceKm,
+        status: order.orderStatus,
+        statusHistory: order.rejectionHistory.length > 0 
+          ? order.rejectionHistory 
+          : [{ status: order.orderStatus, timestamp: order.createdAt }]
+      },
+      payment: {
+        method: order.paymentMethod,
+        status: order.orderStatus === 'delivered' ? 'paid' : 'pending',
+        amount: {
+          subtotal: order.subtotal,
+          deliveryCharge: order.deliveryCharge,
+          tax: order.tax,
+          discount: order.discountAmount,
+          total: order.totalAmount,
+          currency: 'INR'
+        }
+      },
+      timestamps: {
+        orderedAt: order.orderTime,
+        estimatedDelivery: null, // You might want to calculate this
+        preparedAt: order.orderStatus === 'prepared' ? order.updatedAt : null,
+        deliveredAt: order.orderStatus === 'delivered' ? order.updatedAt : null
+      }
+    }));
+
+    res.json({
+      success: true,
+      count: orders.length,
+      data: transformedOrders,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit)
+      }
+    });
+
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch orders" });
+    console.error('Error fetching orders:', err);
+    res.status(500).json({ 
+      success: false,
+      error: "Failed to fetch orders",
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 };
 
@@ -746,7 +834,8 @@ exports.getOrderPriceSummary = async (req, res) => {
 
 exports.getOrderPriceSummaryByaddressId = async (req, res) => {
   try {
-    const { addressId, couponCode, cartId, userId } = req.body;
+    const { addressId} = req.params
+    const {  couponCode, cartId, userId } = req.body;
 
     if (!cartId || !userId || !addressId) {
       return res.status(400).json({ 

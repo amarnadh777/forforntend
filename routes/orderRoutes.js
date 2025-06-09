@@ -21,7 +21,8 @@ const {
   merchantAcceptOrder,
   merchantRejectOrder,
   placeOrder,
-  getOrderPriceSummary
+  getOrderPriceSummary,
+  getOrderPriceSummaryByaddressId
  
   
 } = require('../controllers/orderController');
@@ -38,7 +39,7 @@ router.get('/', getAllOrders); // Admin - get all orders
 router.get('/:orderId', getOrderById); // Get specific order
 
 // customer and agent orders
-router.get('/customer/:customerId', getOrdersByCustomer);
+router.get('/customer/orders',protect, getOrdersByCustomer);
 router.get('/customer/:customerId/status', getOrdersByCustomer);
 router.get('/agent/:agentId', getOrdersByAgent);
 
@@ -65,5 +66,7 @@ router.put('/:orderId/merchant-reject',merchantRejectOrder)
 
 
 router.post("/pricesummary", protect, getOrderPriceSummary)
+
+router.post("/pricesummary/:addessId", protect,getOrderPriceSummaryByaddressId)
 
 module.exports = router;
