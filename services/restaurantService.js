@@ -15,9 +15,9 @@ const restaurantService = {
       if (!restaurant) {
         return restaurantService._statusResponse(false, "Restaurant not found");
       }
-
+      console.log(restaurant.active)
       if (!restaurant.active) {
-        return restaurantService._statusResponse(false, "Restaurant is inactive");
+        return restaurantService._statusResponse(false, "Restaurant is  temporary closed");
       }
 
       if (!restaurant.autoOnOff) {

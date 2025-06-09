@@ -941,7 +941,7 @@ exports.getPastOrders = async (req, res) => {
       orderStatus: { $in: ['completed', 'cancelled_by_customer', 'rejected_by_restaurant'] }
     })
     .sort({ orderTime: -1 })
-    .populate('restaurantId', 'name images').populate('orderItems.productId', 'name image price');
+    .populate('restaurantId', 'name images').populate('orderItems.productId', 'name images price');
 
   
 
@@ -975,10 +975,11 @@ exports.getPastOrders = async (req, res) => {
       const itemsWithAvailability = await Promise.all(
         order.orderItems.map(async (item) => {
           const productAvailability = await productService.checkProductAvailability(item.productId?._id);
+          console.log(item.productId)
           return {
             productId: item.productId?._id ? item.productId._id.toString() : "null",
             name: item.productId?.name ? String(item.productId.name) : "null",
-            image: item.productId?.image ? String(item.productId.image) : "null",
+            image: item.productId?.images[0] ? String(item.productId.images[0]) : "null",
             quantity: item.quantity ? String(item.quantity) : "0",
             price: item.price ? String(item.price) : "0",
             isAvailableNow: productAvailability.isAvailable ? "1" : "0",
@@ -989,29 +990,23 @@ exports.getPastOrders = async (req, res) => {
 
       return {
         orderId: order._id.toString(),
-        restaurant: {
-          id: order.restaurantId._id.toString(),
-          name: order.restaurantId.name ? String(order.restaurantId.name) : "null",
-          images: order.restaurantId.images ? String(order.restaurantId.images) : "null",
-          isAvailable: availability.isAvailable ? "1" : "0",
-          nonAvailabilityReason: availability.nonAvailabilityReason || null,
-          nextOpeningTime: availability.nextOpeningTime || null
-        },
+       restaurant: {
+  id: order.restaurantId._id.toString(),
+  name: order.restaurantId.name ? String(order.restaurantId.name) : "null",
+  image: order.restaurantId.images ? String(order.restaurantId.images) : "null",
+  isAvailable: availability.isAvailable ? "1" : "0",
+  nonAvailabilityReason: availability.reason || null, // <-- corrected line
+  nextOpeningTime: availability.nextOpeningTime || null
+} ,
         orderTime: order.orderTime ? order.orderTime.toISOString() : "null",
-        deliveryTime: order.deliveryTime ? order.deliveryTime.toISOString() : "null",
+        deliveryTime: order.deliveryTime ? order.deliveryTime.toISOString() : "18 mins",
         status: order.orderStatus ? String(order.orderStatus) : "null",
         cancellationReason: order.cancellationReason ? String(order.cancellationReason) : "null",
         items: itemsWithAvailability,
         totalAmount: order.totalAmount ? String(order.totalAmount) : "0",
         deliveryCharge: order.deliveryCharge ? String(order.deliveryCharge) : "0",
-        distanceKm: order.distanceKm ? String(order.distanceKm) : "0",
-        deliveryAddress: {
-          street: deliveryAddress.street ? String(deliveryAddress.street) : "null",
-          city: deliveryAddress.city ? String(deliveryAddress.city) : "null",
-          state: deliveryAddress.state ? String(deliveryAddress.state) : "null",
-          pincode: deliveryAddress.pincode ? String(deliveryAddress.pincode) : "null",
-          country: deliveryAddress.country ? String(deliveryAddress.country) : "null"
-        }
+
+
       };
     }));
 

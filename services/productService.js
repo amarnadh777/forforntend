@@ -96,7 +96,7 @@ const productService = {
       const restaurant = product.restaurantId;
 
       if (!restaurant || !restaurant.active) {
-        return productService._availabilityResponse(false, 'Restaurant is inactive or not found');
+        return productService._availabilityResponse(false, 'Restaurant is  temporary closed');
       }
 
       // If autoOnOff is false, consider always open
