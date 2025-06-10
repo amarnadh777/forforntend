@@ -297,7 +297,7 @@ exports.getRestaurantById = async (req, res) => {
     }
 
     const restaurant = await Restaurant.findById(restaurantId)
-      .select("-ownerId -kycDocuments -__v");
+      .select("-ownerId -kycDocuments -serviceAreas -__v");
 
     if (!restaurant) {
       return res.status(404).json({
