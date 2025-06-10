@@ -253,12 +253,63 @@ if (userCoords[0] < -180 || userCoords[0] > 180 ||
     // Clear the cart after successful order placement
     await Cart.findByIdAndDelete(cartId);
 
-    return res.status(201).json({
-      message: "Order placed successfully",
-      messageType: "success",
-      order: savedOrder
-    });
 
+
+
+    // Format order data to string values
+const formattedOrder = {
+  _id: savedOrder._id?.toString() || "",
+  customerId: savedOrder.customerId?.toString() || "",
+  restaurantId: savedOrder.restaurantId?.toString() || "",
+  orderItems: savedOrder.orderItems.map((item) => ({
+    productId: item.productId?.toString() || "",
+    quantity: item.quantity?.toString() || "0",
+    price: item.price?.toString() || "0",
+    name: item.name?.toString() || "",
+    totalPrice: item.totalPrice?.toString() || "0",
+    image: item.image ? item.image.toString() : "",
+  })),
+  paymentMethod: savedOrder.paymentMethod?.toString() || "",
+  orderStatus: savedOrder.orderStatus?.toString() || "",
+  deliveryLocation: {
+    type: savedOrder.deliveryLocation?.type?.toString() || "",
+    coordinates: savedOrder.deliveryLocation?.coordinates?.map(coord => coord?.toString() || "0") || [],
+  },
+  deliveryAddress: {
+    street: savedOrder.deliveryAddress?.street?.toString() || "",
+    area: savedOrder.deliveryAddress?.area?.toString() || "",
+    landmark: savedOrder.deliveryAddress?.landmark?.toString() || "",
+    city: savedOrder.deliveryAddress?.city?.toString() || "",
+    state: savedOrder.deliveryAddress?.state?.toString() || "",
+    pincode: savedOrder.deliveryAddress?.pincode?.toString() || "",
+    country: savedOrder.deliveryAddress?.country?.toString() || "",
+    latitude: savedOrder.deliveryAddress?.latitude?.toString() || "",
+    longitude: savedOrder.deliveryAddress?.longitude?.toString() || "",
+  },
+  subtotal: savedOrder.subtotal?.toString() || "0",
+  tax: savedOrder.tax?.toString() || "0",
+  discountAmount: savedOrder.discountAmount?.toString() || "0",
+  deliveryCharge: savedOrder.deliveryCharge?.toString() || "0",
+  surgeCharge: savedOrder.surgeCharge?.toString() || "0",
+  tipAmount: savedOrder.tipAmount?.toString() || "0",
+  totalAmount: savedOrder.totalAmount?.toString() || "0",
+  distanceKm: savedOrder.distanceKm?.toString() || "0",
+  couponCode: savedOrder.couponCode?.toString() || "",
+  instructions: savedOrder.instructions?.toString() || "",
+  createdAt: savedOrder.createdAt?.toISOString() || "",
+  updatedAt: savedOrder.updatedAt?.toISOString() || "",
+};
+
+
+// Send response
+return res.status(201).json({
+  message: "Order placed successfully",
+  messageType: "success",
+  order: formattedOrder
+});
+
+
+ 
   } catch (err) {
     console.error("Error placing order:", err);
     res.status(500).json({ 
