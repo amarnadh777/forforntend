@@ -500,6 +500,7 @@ exports.getAddress = async (req, res) => {
 exports.updateAddressById = async (req, res) => {
   try {
    const userId = req.user._id;
+   const {addressId} = req.params
     const { street, city, state, zip, longitude, latitude } = req.body;
 
     // Validate essentials
