@@ -516,12 +516,10 @@ exports.getAddress = async (req, res) => {
         receiverPhone: address.receiverPhone || "",
         directionsToReach: address.directionsToReach || "",
         isDefault: address.isDefault || "",
-
         location: {
-  latitude: latitude !== null ? String(latitude) : "",
-  longitude: longitude !== null ? String(longitude) : ""
-}
-      ,
+          latitude,
+          longitude
+        },
         addressString // include the clean, formatted address
       };
     });
