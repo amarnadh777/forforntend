@@ -106,7 +106,6 @@ exports.createOrder = async (req, res) => {
     return res.status(500).json({ error: "Failed to create order", details: err.message });
   }
 };
-;
 
 
 exports.placeOrder = async (req, res) => {
@@ -120,8 +119,14 @@ exports.placeOrder = async (req, res) => {
       couponCode,
       instructions,
       tipAmount = 0,
-      street,
+      // Address fields
+      type = "Home", // Default to Home if not specified
+      receiverName,
+      receiverPhone,
       area,
+      directionsToReach,
+      displayName,
+      street,
       landmark,
       city,
       state,
@@ -130,44 +135,49 @@ exports.placeOrder = async (req, res) => {
     } = req.body;
 
     // Basic validation
-    if (!cartId || !userId || !paymentMethod || !longitude || !latitude || !street || !city || !pincode) {
+    const requiredFields = {
+      cartId,
+      userId,
+      paymentMethod,
+      longitude,
+      latitude,
+      street,
+      city,
+      pincode
+    };
+
+    const missingFields = Object.entries(requiredFields)
+      .filter(([_, value]) => !value)
+      .map(([key]) => key);
+
+    if (missingFields.length > 0) {
       return res.status(400).json({ 
-        message: "Required fields are missing",
+        message: `Missing required fields: ${missingFields.join(', ')}`,
         messageType: "failure" 
       });
-    } 
+    }
 
-
-
-
-
+    // Validate coordinates
     if (isNaN(parseFloat(longitude)) || isNaN(parseFloat(latitude))) {
-  return res.status(400).json({
-    message: "Invalid coordinates provided",
-    messageType: "failure"
-  });
-}
+      return res.status(400).json({
+        message: "Invalid coordinates provided",
+        messageType: "failure"
+      });
+    }
 
-const userCoords = [parseFloat(longitude), parseFloat(latitude)];
+    const userCoords = [parseFloat(longitude), parseFloat(latitude)];
 
-// Validate coordinate ranges
-if (userCoords[0] < -180 || userCoords[0] > 180 || 
-    userCoords[1] < -90 || userCoords[1] > 90) {
-  return res.status(400).json({
-    message: "Coordinates out of valid range (longitude: -180 to 180, latitude: -90 to 90)",
-    messageType: "failure"
-  });
-}
-
-
-
-
-
-
+    // Validate coordinate ranges
+    if (userCoords[0] < -180 || userCoords[0] > 180 || 
+        userCoords[1] < -90 || userCoords[1] > 90) {
+      return res.status(400).json({
+        message: "Coordinates out of valid range (longitude: -180 to 180, latitude: -90 to 90)",
+        messageType: "failure"
+      });
+    }
 
     // Find cart and restaurant
     const cart = await Cart.findOne({ _id: cartId, user: userId });
-    
     if (!cart) {
       return res.status(404).json({ 
         message: "Cart not found",
@@ -183,17 +193,6 @@ if (userCoords[0] < -180 || userCoords[0] > 180 ||
       });
     }
 
-//     const isInserviceArea = await isLocationInServiceArea(restaurant._id,longitude, latitude)
-   
-
-
-//     if (!isInserviceArea) {
-//   return res.status(400).json({
-//     message: "Sorry, this restaurant does not deliver to your location.",
-//     messageType: "failure",
-//   });
-// }
-  
     // Calculate bill summary
     const billSummary = calculateOrderCost({
       cartProducts: cart.products,
@@ -217,7 +216,7 @@ if (userCoords[0] < -180 || userCoords[0] > 180 ||
       })
     );
 
-    // Create and save order
+    // Create and save order with enhanced delivery address
     const newOrder = new Order({
       customerId: userId,
       restaurantId: cart.restaurantId,
@@ -226,9 +225,14 @@ if (userCoords[0] < -180 || userCoords[0] > 180 ||
       orderStatus: "pending",
       deliveryLocation: { type: "Point", coordinates: userCoords },
       deliveryAddress: {
+        type,
+        displayName: displayName || `${type} address`,
+        receiverName,
+        receiverPhone,
         street,
         area,
         landmark,
+        directionsToReach,
         city,
         state,
         pincode,
@@ -253,63 +257,62 @@ if (userCoords[0] < -180 || userCoords[0] > 180 ||
     // Clear the cart after successful order placement
     await Cart.findByIdAndDelete(cartId);
 
-
-
-
     // Format order data to string values
-const formattedOrder = {
-  _id: savedOrder._id?.toString() || "",
-  customerId: savedOrder.customerId?.toString() || "",
-  restaurantId: savedOrder.restaurantId?.toString() || "",
-  orderItems: savedOrder.orderItems.map((item) => ({
-    productId: item.productId?.toString() || "",
-    quantity: item.quantity?.toString() || "0",
-    price: item.price?.toString() || "0",
-    name: item.name?.toString() || "",
-    totalPrice: item.totalPrice?.toString() || "0",
-    image: item.image ? item.image.toString() : "",
-  })),
-  paymentMethod: savedOrder.paymentMethod?.toString() || "",
-  orderStatus: savedOrder.orderStatus?.toString() || "",
-  deliveryLocation: {
-    type: savedOrder.deliveryLocation?.type?.toString() || "",
-    coordinates: savedOrder.deliveryLocation?.coordinates?.map(coord => coord?.toString() || "0") || [],
-  },
-  deliveryAddress: {
-    street: savedOrder.deliveryAddress?.street?.toString() || "",
-    area: savedOrder.deliveryAddress?.area?.toString() || "",
-    landmark: savedOrder.deliveryAddress?.landmark?.toString() || "",
-    city: savedOrder.deliveryAddress?.city?.toString() || "",
-    state: savedOrder.deliveryAddress?.state?.toString() || "",
-    pincode: savedOrder.deliveryAddress?.pincode?.toString() || "",
-    country: savedOrder.deliveryAddress?.country?.toString() || "",
-    latitude: savedOrder.deliveryAddress?.latitude?.toString() || "",
-    longitude: savedOrder.deliveryAddress?.longitude?.toString() || "",
-  },
-  subtotal: savedOrder.subtotal?.toString() || "0",
-  tax: savedOrder.tax?.toString() || "0",
-  discountAmount: savedOrder.discountAmount?.toString() || "0",
-  deliveryCharge: savedOrder.deliveryCharge?.toString() || "0",
-  surgeCharge: savedOrder.surgeCharge?.toString() || "0",
-  tipAmount: savedOrder.tipAmount?.toString() || "0",
-  totalAmount: savedOrder.totalAmount?.toString() || "0",
-  distanceKm: savedOrder.distanceKm?.toString() || "0",
-  couponCode: savedOrder.couponCode?.toString() || "",
-  instructions: savedOrder.instructions?.toString() || "",
-  createdAt: savedOrder.createdAt?.toISOString() || "",
-  updatedAt: savedOrder.updatedAt?.toISOString() || "",
-};
+    const formattedOrder = {
+      _id: savedOrder._id?.toString() || "",
+      customerId: savedOrder.customerId?.toString() || "",
+      restaurantId: savedOrder.restaurantId?.toString() || "",
+      orderItems: savedOrder.orderItems.map((item) => ({
+        productId: item.productId?.toString() || "",
+        quantity: item.quantity?.toString() || "0",
+        price: item.price?.toString() || "0",
+        name: item.name?.toString() || "",
+        totalPrice: item.totalPrice?.toString() || "0",
+        image: item.image ? item.image.toString() : "",
+      })),
+      paymentMethod: savedOrder.paymentMethod?.toString() || "",
+      orderStatus: savedOrder.orderStatus?.toString() || "",
+      deliveryLocation: {
+        type: savedOrder.deliveryLocation?.type?.toString() || "",
+        coordinates: savedOrder.deliveryLocation?.coordinates?.map(coord => coord?.toString() || "0") || [],
+      },
+      deliveryAddress: {
+        type: savedOrder.deliveryAddress?.type?.toString() || "Home",
+        displayName: savedOrder.deliveryAddress?.displayName?.toString() || "",
+        receiverName: savedOrder.deliveryAddress?.receiverName?.toString() || "",
+        receiverPhone: savedOrder.deliveryAddress?.receiverPhone?.toString() || "",
+        street: savedOrder.deliveryAddress?.street?.toString() || "",
+        area: savedOrder.deliveryAddress?.area?.toString() || "",
+        landmark: savedOrder.deliveryAddress?.landmark?.toString() || "",
+        directionsToReach: savedOrder.deliveryAddress?.directionsToReach?.toString() || "",
+        city: savedOrder.deliveryAddress?.city?.toString() || "",
+        state: savedOrder.deliveryAddress?.state?.toString() || "",
+        pincode: savedOrder.deliveryAddress?.pincode?.toString() || "",
+        country: savedOrder.deliveryAddress?.country?.toString() || "India",
+        latitude: savedOrder.deliveryAddress?.latitude?.toString() || "",
+        longitude: savedOrder.deliveryAddress?.longitude?.toString() || "",
+      },
+      subtotal: savedOrder.subtotal?.toString() || "0",
+      tax: savedOrder.tax?.toString() || "0",
+      discountAmount: savedOrder.discountAmount?.toString() || "0",
+      deliveryCharge: savedOrder.deliveryCharge?.toString() || "0",
+      surgeCharge: savedOrder.surgeCharge?.toString() || "0",
+      tipAmount: savedOrder.tipAmount?.toString() || "0",
+      totalAmount: savedOrder.totalAmount?.toString() || "0",
+      distanceKm: savedOrder.distanceKm?.toString() || "0",
+      couponCode: savedOrder.couponCode?.toString() || "",
+      instructions: savedOrder.instructions?.toString() || "",
+      createdAt: savedOrder.createdAt?.toISOString() || "",
+      updatedAt: savedOrder.updatedAt?.toISOString() || "",
+    };
 
+    // Send response
+    return res.status(201).json({
+      message: "Order placed successfully",
+      messageType: "success",
+      order: formattedOrder
+    });
 
-// Send response
-return res.status(201).json({
-  message: "Order placed successfully",
-  messageType: "success",
-  order: formattedOrder
-});
-
-
- 
   } catch (err) {
     console.error("Error placing order:", err);
     res.status(500).json({ 
@@ -319,6 +322,7 @@ return res.status(201).json({
     });
   }
 };
+
 // Get Order by ID
 exports.getOrderById = async (req, res) => {
   try {

@@ -90,15 +90,22 @@ const orderSchema = mongoose.Schema({
     }
   },
 
-  deliveryAddress: {
-    street: { type: String, required: true },
-    area: { type: String },
-    landmark: { type: String },
-    city: { type: String, required: true },
-    state: { type: String },
-    pincode: { type: String, required: true },
-    country: { type: String, default: 'India' },
-  },
+deliveryAddress: {
+  type: { type: String, default: "Home" },
+  displayName: { type: String },
+  receiverName: { type: String },
+  receiverPhone: { type: String },
+  street: { type: String, required: true },
+  area: { type: String },
+  landmark: { type: String },
+  directionsToReach: { type: String },
+  city: { type: String, required: true },
+  state: { type: String },
+  pincode: { type: String, required: true },
+  country: { type: String, default: 'India' },
+  latitude: { type: Number },
+  longitude: { type: Number },
+},
 
   guestName: { type: String },
   guestPhone: { type: String },
