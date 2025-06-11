@@ -15,7 +15,7 @@ router.post("/verify-otp", verifyOtp);
 router.post("/resend-otp", resendOtp);
 router.post("/login", loginUser);
 
-router.post("/address",addAddress)
+router.post("/address",protect,addAddress)
 router.put("/address/:addressId",protect,updateAddressById)
 router.delete("/address/:addressId",protect,deleteAddressById)
 router.get("/adderss/:userId",protect,getAddress)

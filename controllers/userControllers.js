@@ -291,14 +291,41 @@ exports.loginUser = async (req, res) => {
 
 exports.addAddress = async (req, res) => {
   try {
-    const userId = req.user?._id || req.body?.userId;
-    const { type, street, city, state, zip, longitude, latitude, displayName } = req.body;
+    const userId = req.user._id;
+    const { 
+      type = "Home",
+      street,
+      city,
+      state,
+      zip,
+      longitude,
+      latitude,
+      displayName,
+      receiverName,
+      receiverPhone,
+      area,
+      directionsToReach   // New optional field
+    } = req.body;
 
     // Validate required fields
-    if (!street || !city || !state || !zip || !longitude || !latitude || !userId) {
+    const requiredFields = { street, city, state, zip, longitude, latitude, userId };
+    const missingFields = Object.entries(requiredFields)
+      .filter(([_, value]) => !value)
+      .map(([key]) => key);
+
+    if (missingFields.length > 0) {
       return res.status(400).json({
         success: false,
-        message: "All required fields are missing",
+        message: `Missing required fields: ${missingFields.join(', ')}`,
+        messageType: "failure"
+      });
+    }
+
+    // Validate coordinates
+    if (isNaN(longitude) || isNaN(latitude)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid coordinates",
         messageType: "failure"
       });
     }
@@ -320,16 +347,20 @@ exports.addAddress = async (req, res) => {
 
     // Create new address object
     const newAddress = {
-      type, // Home/Work/Other
+      type: type.charAt(0).toUpperCase() + type.slice(1),
       street,
       city,
       state,
       zip,
-      displayName:displayName, // Optional display name for the address
+      area: area || undefined,
+      displayName: displayName || `${type} address`,
       location: {
         type: "Point",
         coordinates: [parseFloat(longitude), parseFloat(latitude)],
       },
+      ...(receiverName && { receiverName }),
+      ...(receiverPhone && { receiverPhone }),
+      ...(directionsToReach && { directionsToReach })  // Include if provided
     };
 
     // Add the new address
@@ -353,6 +384,7 @@ exports.addAddress = async (req, res) => {
     });
   }
 };
+
 exports.deleteAddressById = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -436,7 +468,7 @@ exports.deleteAddressById = async (req, res) => {
 
 exports.getAddress = async (req, res) => {
   try {
-       const userId = req.user._id;
+    const userId = req.user._id;
 
     if (!userId) {
       return res.status(400).json({
@@ -456,7 +488,6 @@ exports.getAddress = async (req, res) => {
       });
     }
 
-    // Map addresses safely to include latitude & longitude if available
     const formattedAddresses = (userExist.addresses || []).map(address => {
       let latitude = null;
       let longitude = null;
@@ -465,18 +496,35 @@ exports.getAddress = async (req, res) => {
         [longitude, latitude] = address.location.coordinates;
       }
 
+      // Build address string
+      const parts = [
+        address.street,
+        address.area,
+        address.city,
+        address.state,
+        address.zip
+      ].filter(Boolean); // removes undefined/null/empty
+
+      const addressString = parts.join(", ");
+
       return {
         addressId: address._id,
         type: address.type || null,
+        displayName: address.displayName || null,
         street: address.street || null,
+        area: address.area || null,
         city: address.city || null,
         state: address.state || null,
         zip: address.zip || null,
-        displayName:address.displayName || null,
+        receiverName: address.receiverName || null,
+        receiverPhone: address.receiverPhone || null,
+        directionsToReach: address.directionsToReach || null,
+        isDefault: address.isDefault || false,
         location: {
           latitude,
           longitude
-        }
+        },
+        addressString // include the clean, formatted address
       };
     });
 
@@ -484,7 +532,7 @@ exports.getAddress = async (req, res) => {
       success: true,
       message: "Addresses fetched successfully",
       messageType: "success",
-      Addresses: formattedAddresses
+      addresses: formattedAddresses
     });
 
   } catch (error) {
@@ -496,14 +544,16 @@ exports.getAddress = async (req, res) => {
     });
   }
 };
-
 exports.updateAddressById = async (req, res) => {
   try {
-   const userId = req.user._id;
-   const {addressId} = req.params
-    const { street, city, state, zip, longitude, latitude } = req.body;
+    const userId = req.user._id;
+    const { addressId } = req.params;
+    const {
+      street, city, state, zip, longitude, latitude,
+      area, receiverName, receiverPhone, displayName,
+      directionsToReach, isDefault
+    } = req.body;
 
-    // Validate essentials
     if (!userId) {
       return res.status(400).json({
         success: false,
@@ -512,7 +562,6 @@ exports.updateAddressById = async (req, res) => {
       });
     }
 
-    // Find the user
     const userExist = await User.findById(userId);
     if (!userExist) {
       return res.status(404).json({
@@ -522,7 +571,6 @@ exports.updateAddressById = async (req, res) => {
       });
     }
 
-    // Find the address
     const address = userExist.addresses.id(addressId);
     if (!address) {
       return res.status(404).json({
@@ -537,6 +585,12 @@ exports.updateAddressById = async (req, res) => {
     if (city !== undefined) address.city = city;
     if (state !== undefined) address.state = state;
     if (zip !== undefined) address.zip = zip;
+    if (area !== undefined) address.area = area;
+    if (receiverName !== undefined) address.receiverName = receiverName;
+    if (receiverPhone !== undefined) address.receiverPhone = receiverPhone;
+    if (displayName !== undefined) address.displayName = displayName;
+    if (directionsToReach !== undefined) address.directionsToReach = directionsToReach;
+    if (isDefault !== undefined) address.isDefault = isDefault;
 
     if (longitude !== undefined && latitude !== undefined) {
       address.location = {
@@ -545,7 +599,6 @@ exports.updateAddressById = async (req, res) => {
       };
     }
 
-    // Save updated user document
     await userExist.save();
 
     // Format updated addresses
@@ -557,21 +610,37 @@ exports.updateAddressById = async (req, res) => {
         [lon, lat] = addr.location.coordinates;
       }
 
+      const parts = [
+        addr.street,
+        addr.area,
+        addr.city,
+        addr.state,
+        addr.zip
+      ].filter(Boolean);
+
+      const addressString = parts.join(", ");
+
       return {
         addressId: addr._id,
         type: addr.type || null,
+        displayName: addr.displayName || null,
         street: addr.street || null,
+        area: addr.area || null,
         city: addr.city || null,
         state: addr.state || null,
         zip: addr.zip || null,
+        receiverName: addr.receiverName || null,
+        receiverPhone: addr.receiverPhone || null,
+        directionsToReach: addr.directionsToReach || null,
+        isDefault: addr.isDefault || false,
         location: {
           latitude: lat,
           longitude: lon
-        }
+        },
+        addressString
       };
     });
 
-    // Success response
     return res.status(200).json({
       success: true,
       message: "Address updated successfully",
