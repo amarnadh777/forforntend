@@ -505,17 +505,17 @@ exports.getAddress = async (req, res) => {
 
       return {
         addressId: address._id,
-        type: address.type || null,
-        displayName: address.displayName || null,
-        street: address.street || null,
-        area: address.area || null,
-        city: address.city || null,
-        state: address.state || null,
-        zip: address.zip || null,
-        receiverName: address.receiverName || null,
-        receiverPhone: address.receiverPhone || null,
-        directionsToReach: address.directionsToReach || null,
-        isDefault: address.isDefault || false,
+        type: address.type || "",
+        displayName: address.displayName || "",
+        street: address.street || "",
+        area: address.area || "",
+        city: address.city || "",
+        state: address.state || "",
+        zip: address.zip || "",
+        receiverName: address.receiverName || "",
+        receiverPhone: address.receiverPhone || "",
+        directionsToReach: address.directionsToReach || "",
+        isDefault: address.isDefault || "",
         location: {
           latitude,
           longitude
