@@ -1,52 +1,73 @@
 const Order = require("../models/orderModel");
-const Cart = require("../models/cartModel")
-const Restaurant = require("../models/restaurantModel")
-const User = require("../models/userModel")
-const { calculateOrderCost} = require("../services/orderCostCalculator")
+const Cart = require("../models/cartModel");
+const Restaurant = require("../models/restaurantModel");
+const User = require("../models/userModel");
+const { calculateOrderCost } = require("../services/orderCostCalculator");
 
 // Create Orderconst Product = require("../models/FoodItem"); // Your product model
-const mongoose = require("mongoose")
-const Product = require("../models/productModel")
-const  restaurantService = require("../services/restaurantService")
-const productService = require("../services/productService")
-const  isLocationInServiceArea = require("../services/isLocationInServiceArea")
+const mongoose = require("mongoose");
+const Product = require("../models/productModel");
+const restaurantService = require("../services/restaurantService");
+const productService = require("../services/productService");
+const isLocationInServiceArea = require("../services/isLocationInServiceArea");
 exports.createOrder = async (req, res) => {
   try {
-    const { customerId, restaurantId, orderItems, paymentMethod, location } = req.body;
+    const { customerId, restaurantId, orderItems, paymentMethod, location } =
+      req.body;
 
-    if (!restaurantId || !orderItems || !Array.isArray(orderItems) || orderItems.length === 0) {
-      return res.status(400).json({ error: "restaurantId and orderItems are required" });
+    if (
+      !restaurantId ||
+      !orderItems ||
+      !Array.isArray(orderItems) ||
+      orderItems.length === 0
+    ) {
+      return res
+        .status(400)
+        .json({ error: "restaurantId and orderItems are required" });
     }
 
     // Validate location
-    if (!location || !Array.isArray(location.coordinates) || location.coordinates.length !== 2) {
+    if (
+      !location ||
+      !Array.isArray(location.coordinates) ||
+      location.coordinates.length !== 2
+    ) {
       return res.status(400).json({
-        error: "Valid location coordinates are required in [longitude, latitude] format",
+        error:
+          "Valid location coordinates are required in [longitude, latitude] format",
       });
     }
 
     const [longitude, latitude] = location.coordinates;
-    if (typeof longitude !== 'number' || typeof latitude !== 'number') {
+    if (typeof longitude !== "number" || typeof latitude !== "number") {
       return res.status(400).json({
         error: "Coordinates must be numbers in [longitude, latitude] format",
       });
     }
 
     // Extract product IDs from order items
-    const productIds = orderItems.map(item => item.productId);
+    const productIds = orderItems.map((item) => item.productId);
 
     // Fetch active products matching those IDs and restaurant
-    const products = await Product.find({ _id: { $in: productIds }, restaurantId, active: true });
+    const products = await Product.find({
+      _id: { $in: productIds },
+      restaurantId,
+      active: true,
+    });
 
     // Extract found product IDs as strings
-    const foundIds = products.map(p => p._id.toString());
+    const foundIds = products.map((p) => p._id.toString());
 
     // Find missing product IDs by comparing with order items
-    const missingIds = productIds.filter(id => !foundIds.includes(id));
+    const missingIds = productIds.filter((id) => !foundIds.includes(id));
 
     if (missingIds.length > 0) {
-      const missingItems = orderItems.filter(item => missingIds.includes(item.productId));
-      const missingNames = missingItems.map(item => item.name || "Unknown Product");
+      const missingItems = orderItems.filter((item) =>
+        missingIds.includes(item.productId)
+      );
+      const missingNames = missingItems.map(
+        (item) => item.name || "Unknown Product"
+      );
 
       return res.status(400).json({
         error: "Some ordered items are invalid or unavailable",
@@ -59,7 +80,7 @@ exports.createOrder = async (req, res) => {
     const now = new Date();
 
     for (const item of orderItems) {
-      const product = products.find(p => p._id.toString() === item.productId);
+      const product = products.find((p) => p._id.toString() === item.productId);
       let price = product.price;
 
       if (
@@ -100,13 +121,13 @@ exports.createOrder = async (req, res) => {
     });
 
     return res.status(201).json(savedOrder);
-
   } catch (err) {
     console.error("createOrder error:", err);
-    return res.status(500).json({ error: "Failed to create order", details: err.message });
+    return res
+      .status(500)
+      .json({ error: "Failed to create order", details: err.message });
   }
 };
-
 
 exports.placeOrder = async (req, res) => {
   try {
@@ -143,7 +164,7 @@ exports.placeOrder = async (req, res) => {
       latitude,
       street,
       city,
-      pincode
+      pincode,
     };
 
     const missingFields = Object.entries(requiredFields)
@@ -151,9 +172,9 @@ exports.placeOrder = async (req, res) => {
       .map(([key]) => key);
 
     if (missingFields.length > 0) {
-      return res.status(400).json({ 
-        message: `Missing required fields: ${missingFields.join(', ')}`,
-        messageType: "failure" 
+      return res.status(400).json({
+        message: `Missing required fields: ${missingFields.join(", ")}`,
+        messageType: "failure",
       });
     }
 
@@ -161,35 +182,40 @@ exports.placeOrder = async (req, res) => {
     if (isNaN(parseFloat(longitude)) || isNaN(parseFloat(latitude))) {
       return res.status(400).json({
         message: "Invalid coordinates provided",
-        messageType: "failure"
+        messageType: "failure",
       });
     }
 
     const userCoords = [parseFloat(longitude), parseFloat(latitude)];
 
     // Validate coordinate ranges
-    if (userCoords[0] < -180 || userCoords[0] > 180 || 
-        userCoords[1] < -90 || userCoords[1] > 90) {
+    if (
+      userCoords[0] < -180 ||
+      userCoords[0] > 180 ||
+      userCoords[1] < -90 ||
+      userCoords[1] > 90
+    ) {
       return res.status(400).json({
-        message: "Coordinates out of valid range (longitude: -180 to 180, latitude: -90 to 90)",
-        messageType: "failure"
+        message:
+          "Coordinates out of valid range (longitude: -180 to 180, latitude: -90 to 90)",
+        messageType: "failure",
       });
     }
 
     // Find cart and restaurant
     const cart = await Cart.findOne({ _id: cartId, user: userId });
     if (!cart) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         message: "Cart not found",
-        messageType: "failure"
+        messageType: "failure",
       });
     }
 
     const restaurant = await Restaurant.findById(cart.restaurantId);
     if (!restaurant) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         message: "Restaurant not found",
-        messageType: "failure" 
+        messageType: "failure",
       });
     }
 
@@ -274,17 +300,23 @@ exports.placeOrder = async (req, res) => {
       orderStatus: savedOrder.orderStatus?.toString() || "",
       deliveryLocation: {
         type: savedOrder.deliveryLocation?.type?.toString() || "",
-        coordinates: savedOrder.deliveryLocation?.coordinates?.map(coord => coord?.toString() || "0") || [],
+        coordinates:
+          savedOrder.deliveryLocation?.coordinates?.map(
+            (coord) => coord?.toString() || "0"
+          ) || [],
       },
       deliveryAddress: {
         type: savedOrder.deliveryAddress?.type?.toString() || "Home",
         displayName: savedOrder.deliveryAddress?.displayName?.toString() || "",
-        receiverName: savedOrder.deliveryAddress?.receiverName?.toString() || "",
-        receiverPhone: savedOrder.deliveryAddress?.receiverPhone?.toString() || "",
+        receiverName:
+          savedOrder.deliveryAddress?.receiverName?.toString() || "",
+        receiverPhone:
+          savedOrder.deliveryAddress?.receiverPhone?.toString() || "",
         street: savedOrder.deliveryAddress?.street?.toString() || "",
         area: savedOrder.deliveryAddress?.area?.toString() || "",
         landmark: savedOrder.deliveryAddress?.landmark?.toString() || "",
-        directionsToReach: savedOrder.deliveryAddress?.directionsToReach?.toString() || "",
+        directionsToReach:
+          savedOrder.deliveryAddress?.directionsToReach?.toString() || "",
         city: savedOrder.deliveryAddress?.city?.toString() || "",
         state: savedOrder.deliveryAddress?.state?.toString() || "",
         pincode: savedOrder.deliveryAddress?.pincode?.toString() || "",
@@ -310,15 +342,14 @@ exports.placeOrder = async (req, res) => {
     return res.status(201).json({
       message: "Order placed successfully",
       messageType: "success",
-      order: formattedOrder
+      order: formattedOrder,
     });
-
   } catch (err) {
     console.error("Error placing order:", err);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Error placing order",
       messageType: "failure",
-      error: err.message 
+      error: err.message,
     });
   }
 };
@@ -326,7 +357,9 @@ exports.placeOrder = async (req, res) => {
 // Get Order by ID
 exports.getOrderById = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.orderId).populate("customerId restaurantId orderItems.productId");
+    const order = await Order.findById(req.params.orderId).populate(
+      "customerId restaurantId orderItems.productId"
+    );
 
     if (!order) return res.status(404).json({ error: "Order not found" });
 
@@ -341,98 +374,85 @@ exports.getOrderById = async (req, res) => {
 exports.getOrdersByCustomer = async (req, res) => {
   try {
     const customerId = req.user._id;
-    
+
     // Pagination parameters
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
     // Status filter if provided
-    const statusFilter = req.query.status 
-      ? { orderStatus: req.query.status } 
+    const statusFilter = req.query.status
+      ? { orderStatus: req.query.status }
       : {};
 
-    // Get orders with pagination
+    // Fetch orders and total count in parallel
     const [orders, total] = await Promise.all([
       Order.find({ customerId, ...statusFilter })
-        .populate("restaurantId", "name location address images")
+        .populate("restaurantId", "name images")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
-      Order.countDocuments({ customerId, ...statusFilter })
+      Order.countDocuments({ customerId, ...statusFilter }),
     ]);
 
-    // Transform the orders data
-    const transformedOrders = orders.map(order => ({
-      orderId: order._id,
-      customerId: order.customerId,
+    // Transform the orders into clean format
+    const formattedOrders = orders.map((order) => ({
+      orderId: order._id.toString(),
       restaurant: {
-        id: order.restaurantId._id,
-        name: order.restaurantId.name,
-        image: order.restaurantId.images?.[0],
-        location: order.restaurantId.location,
-        address: order.restaurantId.address
+        id: order.restaurantId?._id?.toString() || "",
+        name: order.restaurantId?.name || "",
+        image: order.restaurantId?.images[0] || "",
       },
-      items: order.orderItems.map(item => ({
-        id: item.productId,
+      orderStatus: order.orderStatus,
+      paymentMethod: order.paymentMethod,
+      totalAmount: order.totalAmount?.toString() || "0",
+      deliveryCharge: order.deliveryCharge?.toString() || "0",
+      tax: order.tax?.toString() || "0",
+      tipAmount: order.tipAmount?.toString() || "0",
+      distanceKm: order.distanceKm?.toString() || "0",
+      createdAt: order.createdAt.toISOString(),
+      deliveryAddress: {
+        displayName: order.deliveryAddress?.displayName || "",
+        street: order.deliveryAddress?.street || "",
+        area: order.deliveryAddress?.area || "",
+        landmark: order.deliveryAddress?.landmark || "",
+        city: order.deliveryAddress?.city || "",
+        pincode: order.deliveryAddress?.pincode || "",
+        country: order.deliveryAddress?.country || "India",
+      },
+      items: order.orderItems.map((item) => ({
+        productId: item.productId?.toString() || "",
         name: item.name,
         quantity: item.quantity,
-        price: item.price,
-        totalPrice: item.totalPrice,
-        image: item.image
+        totalPrice: item.totalPrice?.toString() || "0",
+        image: item.image[0] || "",
       })),
-      delivery: {
-        address: order.deliveryAddress,
-        location: order.deliveryLocation,
-        distanceKm: order.distanceKm,
-        status: order.orderStatus,
-        statusHistory: order.rejectionHistory.length > 0 
-          ? order.rejectionHistory 
-          : [{ status: order.orderStatus, timestamp: order.createdAt }]
-      },
-      payment: {
-        method: order.paymentMethod,
-        status: order.orderStatus === 'delivered' ? 'paid' : 'pending',
-        amount: {
-          subtotal: order.subtotal,
-          deliveryCharge: order.deliveryCharge,
-          tax: order.tax,
-          discount: order.discountAmount,
-          total: order.totalAmount,
-          currency: 'INR'
-        }
-      },
-      timestamps: {
-        orderedAt: order.orderTime,
-        estimatedDelivery: null, // You might want to calculate this
-        preparedAt: order.orderStatus === 'prepared' ? order.updatedAt : null,
-        deliveredAt: order.orderStatus === 'delivered' ? order.updatedAt : null
-      }
     }));
 
-    res.json({
-  success: true,
-  messageType: "success",
-  message: "Orders fetched successfully",
-  count: orders.length,
-  data: transformedOrders,
-  pagination: {
-    total,
-    page,
-    limit,
-    pages: Math.ceil(total / limit)
-  }
-})
+    // Send response
+    return res.status(200).json({
+      success: true,
+      message: "Orders fetched successfully",
+      messageType: "success",
+      count: formattedOrders.length,
+      orders: formattedOrders,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      },
+    });
 
   } catch (err) {
-    console.error('Error fetching orders:', err);
-  res.status(500).json({ 
-  success: false,
-  messageType: "failure",
-  message: "Failed to fetch orders",
-  error: process.env.NODE_ENV === 'development' ? err.message : undefined
-});
+    console.error("Error fetching orders:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch orders",
+      messageType: "failure",
+      error: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
   }
 };
 
@@ -622,41 +642,46 @@ exports.getCustomerOrderStatus = async (req, res) => {
 
     res.json(orders);
   } catch (error) {
-    res.status(500).json({ message: "Server error while fetching order status" });
+    res
+      .status(500)
+      .json({ message: "Server error while fetching order status" });
   }
 };
-
-
-
-
-
-
-
-
-
-
 
 exports.getOrderPriceSummary = async (req, res) => {
   try {
     const { longitude, latitude, couponCode, cartId, userId } = req.body;
 
-
     if (!cartId || !userId) {
-      return res.status(400).json({ message: "cartId and userId are required", messageType: "failure" });
+      return res
+        .status(400)
+        .json({
+          message: "cartId and userId are required",
+          messageType: "failure",
+        });
     }
 
     const cart = await Cart.findOne({ _id: cartId, user: userId });
     if (!cart) {
-      return res.status(404).json({ message: "Cart not found for this user", messageType: "failure" });
+      return res
+        .status(404)
+        .json({
+          message: "Cart not found for this user",
+          messageType: "failure",
+        });
     }
 
     if (!cart.products || cart.products.length === 0) {
-      return res.status(400).json({ message: "Cart is empty", messageType: "failure" });
+      return res
+        .status(400)
+        .json({ message: "Cart is empty", messageType: "failure" });
     }
 
     const restaurant = await Restaurant.findById(cart.restaurantId);
     if (!restaurant) {
-      return res.status(404).json({ message: "Restaurant not found", messageType: "failure" });
+      return res
+        .status(404)
+        .json({ message: "Restaurant not found", messageType: "failure" });
     }
 
     const userCoords = [parseFloat(longitude), parseFloat(latitude)];
@@ -678,76 +703,62 @@ exports.getOrderPriceSummary = async (req, res) => {
       messageType: "success",
       data: stringSummary,
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "server error", messageType: "failure" });
   }
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 exports.getOrderPriceSummaryByaddressId = async (req, res) => {
   try {
-    const { addressId} = req.params
-    const {  couponCode, cartId, userId } = req.body;
+    const { addressId } = req.params;
+    const { couponCode, cartId, userId } = req.body;
 
     if (!cartId || !userId || !addressId) {
-      return res.status(400).json({ 
-        message: "cartId, userId, and addressId are required", 
-        messageType: "failure" 
+      return res.status(400).json({
+        message: "cartId, userId, and addressId are required",
+        messageType: "failure",
       });
     }
 
     // Find user and their address
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ 
-        message: "User not found", 
-        messageType: "failure" 
+      return res.status(404).json({
+        message: "User not found",
+        messageType: "failure",
       });
     }
 
     // Find the specific address
     const address = user.addresses.id(addressId);
     if (!address || !address.location || !address.location.coordinates) {
-      return res.status(404).json({ 
-        message: "Address not found or invalid location data", 
-        messageType: "failure" 
+      return res.status(404).json({
+        message: "Address not found or invalid location data",
+        messageType: "failure",
       });
     }
 
     const cart = await Cart.findOne({ _id: cartId, user: userId });
     if (!cart) {
-      return res.status(404).json({ 
-        message: "Cart not found for this user", 
-        messageType: "failure" 
+      return res.status(404).json({
+        message: "Cart not found for this user",
+        messageType: "failure",
       });
     }
 
     if (!cart.products || cart.products.length === 0) {
-      return res.status(400).json({ 
-        message: "Cart is empty", 
-        messageType: "failure" 
+      return res.status(400).json({
+        message: "Cart is empty",
+        messageType: "failure",
       });
     }
 
     const restaurant = await Restaurant.findById(cart.restaurantId);
     if (!restaurant) {
-      return res.status(404).json({ 
-        message: "Restaurant not found", 
-        messageType: "failure" 
+      return res.status(404).json({
+        message: "Restaurant not found",
+        messageType: "failure",
       });
     }
 
@@ -771,24 +782,14 @@ exports.getOrderPriceSummaryByaddressId = async (req, res) => {
       messageType: "success",
       data: stringSummary,
     });
-
   } catch (err) {
     console.error(err);
-    res.status(500).json({ 
-      message: "Server error", 
-      messageType: "failure" 
+    res.status(500).json({
+      message: "Server error",
+      messageType: "failure",
     });
   }
 };
-
-
-
-
-
-
-
-
-
 
 // Get user's past delivered and canceled orders
 
@@ -799,34 +800,37 @@ exports.getPastOrders = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: "0",
-        message: 'Invalid user ID',
-        messageType: "failure"
+        message: "Invalid user ID",
+        messageType: "failure",
       });
     }
 
     const pastOrders = await Order.find({
       customerId: userId,
-      orderStatus: { $in: ['completed', 'cancelled_by_customer', 'rejected_by_restaurant'] }
+      orderStatus: {
+        $in: ["completed", "cancelled_by_customer", "rejected_by_restaurant"],
+      },
     })
-    .sort({ orderTime: -1 })
-    .populate('restaurantId', 'name images').populate('orderItems.productId', 'name images price');
-
-  
+      .sort({ orderTime: -1 })
+      .populate("restaurantId", "name images")
+      .populate("orderItems.productId", "name images price");
 
     if (!pastOrders || pastOrders.length === 0) {
       return res.json({
         success: "1",
-        message: 'No past orders found',
+        message: "No past orders found",
         messageType: "success",
         count: "0",
-        orders: []
+        orders: [],
       });
     }
 
     // Get unique restaurant IDs
-    const restaurantIds = [...new Set(pastOrders.map(order => order.restaurantId._id.toString()))];
+    const restaurantIds = [
+      ...new Set(pastOrders.map((order) => order.restaurantId._id.toString())),
+    ];
 
-    const availabilityPromises = restaurantIds.map(restaurantId =>
+    const availabilityPromises = restaurantIds.map((restaurantId) =>
       restaurantService.checkStatus(restaurantId)
     );
     const availabilityResults = await Promise.all(availabilityPromises);
@@ -836,65 +840,79 @@ exports.getPastOrders = async (req, res) => {
       restaurantAvailability[id] = availabilityResults[index];
     });
 
-    const formattedOrders = await Promise.all(pastOrders.map(async (order) => {
-      const availability = restaurantAvailability[order.restaurantId._id.toString()] || {};
-      const deliveryAddress = order.deliveryAddress || {};
+    const formattedOrders = await Promise.all(
+      pastOrders.map(async (order) => {
+        const availability =
+          restaurantAvailability[order.restaurantId._id.toString()] || {};
+        const deliveryAddress = order.deliveryAddress || {};
 
-      const itemsWithAvailability = await Promise.all(
-        order.orderItems.map(async (item) => {
-          const productAvailability = await productService.checkProductAvailability(item.productId?._id);
-          console.log(item.productId)
-          return {
-            productId: item.productId?._id ? item.productId._id.toString() : "null",
-            name: item.productId?.name ? String(item.productId.name) : "null",
-            image: item.productId?.images[0] ? String(item.productId.images[0]) : "null",
-            quantity: item.quantity ? String(item.quantity) : "0",
-            price: item.price ? String(item.price) : "0",
-            isAvailableNow: productAvailability.isAvailable ? "1" : "0",
-            unavailableReason: productAvailability.reason || null
-          };
-        })
-      );
+        const itemsWithAvailability = await Promise.all(
+          order.orderItems.map(async (item) => {
+            const productAvailability =
+              await productService.checkProductAvailability(
+                item.productId?._id
+              );
+            console.log(item.productId);
+            return {
+              productId: item.productId?._id
+                ? item.productId._id.toString()
+                : "null",
+              name: item.productId?.name ? String(item.productId.name) : "null",
+              image: item.productId?.images[0]
+                ? String(item.productId.images[0])
+                : "null",
+              quantity: item.quantity ? String(item.quantity) : "0",
+              price: item.price ? String(item.price) : "0",
+              isAvailableNow: productAvailability.isAvailable ? "1" : "0",
+              unavailableReason: productAvailability.reason || null,
+            };
+          })
+        );
 
-      return {
-        orderId: order._id.toString(),
-       restaurant: {
-  id: order.restaurantId._id.toString(),
-  name: order.restaurantId.name ? String(order.restaurantId.name) : "null",
-  image: order.restaurantId.images ? String(order.restaurantId.images) : "null",
-  isAvailable: availability.isAvailable ? "1" : "0",
-  nonAvailabilityReason: availability.reason || null, // <-- corrected line
-  nextOpeningTime: availability.nextOpeningTime || null
-} ,
-        orderTime: order.orderTime ? order.orderTime.toISOString() : "null",
-        deliveryTime: order.deliveryTime ? order.deliveryTime.toISOString() : "18 mins",
-        status: order.orderStatus ? String(order.orderStatus) : "null",
-        cancellationReason: order.cancellationReason ? String(order.cancellationReason) : "null",
-        items: itemsWithAvailability,
-        totalAmount: order.totalAmount ? String(order.totalAmount) : "0",
-        deliveryCharge: order.deliveryCharge ? String(order.deliveryCharge) : "0",
-
-
-      };
-    }));
+        return {
+          orderId: order._id.toString(),
+          restaurant: {
+            id: order.restaurantId._id.toString(),
+            name: order.restaurantId.name
+              ? String(order.restaurantId.name)
+              : "null",
+            image: order.restaurantId.images
+              ? String(order.restaurantId.images)
+              : "null",
+            isAvailable: availability.isAvailable ? "1" : "0",
+            nonAvailabilityReason: availability.reason || null, // <-- corrected line
+            nextOpeningTime: availability.nextOpeningTime || null,
+          },
+          orderTime: order.orderTime ? order.orderTime.toISOString() : "null",
+          deliveryTime: order.deliveryTime
+            ? order.deliveryTime.toISOString()
+            : "18 mins",
+          status: order.orderStatus ? String(order.orderStatus) : "null",
+          cancellationReason: order.cancellationReason
+            ? String(order.cancellationReason)
+            : "null",
+          items: itemsWithAvailability,
+          totalAmount: order.totalAmount ? String(order.totalAmount) : "0",
+          deliveryCharge: order.deliveryCharge
+            ? String(order.deliveryCharge)
+            : "0",
+        };
+      })
+    );
 
     res.json({
       success: "1",
-      message: 'Past orders retrieved successfully',
+      message: "Past orders retrieved successfully",
       messageType: "success",
       count: pastOrders.length.toString(),
-      orders: formattedOrders
+      orders: formattedOrders,
     });
-
   } catch (error) {
-    console.error('Error fetching past orders:', error);
+    console.error("Error fetching past orders:", error);
     res.status(500).json({
       success: "0",
-      message: 'Internal server error',
-      messageType: "failure"
+      message: "Internal server error",
+      messageType: "failure",
     });
   }
 };
-
-
-

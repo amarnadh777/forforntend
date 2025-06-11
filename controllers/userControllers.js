@@ -370,10 +370,7 @@ exports.addAddress = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Address added successfully",
-      messageType: "success",
-      data: {
-        addresses: userExist.addresses,
-      },
+      messageType: "success"
     });
   } catch (error) {
     console.error(error);
