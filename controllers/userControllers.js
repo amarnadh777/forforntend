@@ -449,8 +449,7 @@ exports.deleteAddressById = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Address deleted successfully",
-      messageType: "success",
-      data: updatedAddresses
+      messageType: "success"
     });
 
   } catch (error) {
@@ -641,8 +640,7 @@ exports.updateAddressById = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Address updated successfully",
-      messageType: "success",
-      data: updatedAddresses
+      messageType: "success"
     });
 
   } catch (error) {
