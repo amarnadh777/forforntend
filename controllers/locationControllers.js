@@ -24,7 +24,6 @@ function deg2rad(deg) {
 }
 
 
-
 exports.getNearbyRestaurants = async (req, res) => {
   try {
     const { latitude, longitude, distance = 5000 } = req.query;
@@ -55,8 +54,8 @@ exports.getNearbyRestaurants = async (req, res) => {
       });
     }
 
-    // Map response with category check and available foods
-    const responseData = await Promise.all(restaurants.map(async (restaurant) => {
+    // Map response with product availability check
+    const restaurantsWithFoods = await Promise.all(restaurants.map(async (restaurant) => {
       const distanceKm = restaurant.location
         ? getDistanceFromLatLonInKm(
             lat, lng,
@@ -71,16 +70,19 @@ exports.getNearbyRestaurants = async (req, res) => {
       else if (distanceKm <= 8) deliveryTime = "40 mins";
       else deliveryTime = "50+ mins";
 
-      // Check if categories exist for this merchant
-      const categoryCount = await Category.countDocuments({restaurantId: restaurant._id });
-      const isMenuAvailable = categoryCount > 0 ? "1" : "0";
-
       // Get available food items for this restaurant
       const availableFoods = await Product.find({
         restaurantId: restaurant._id,
-        active: true,// Only items with stock > 0
+        active: true,
       })
       .select('name price images foodType specialOffer')
+
+      // Determine if menu is available based on product count
+      const productCount = availableFoods.length;
+      const isMenuAvailable = productCount > 0 ? "1" : "0";
+
+      // If no available foods, return null (we'll filter these out)
+      if (availableFoods.length === 0) return null;
 
       // Format food items for frontend
       const formattedFoods = availableFoods.map(food => ({
@@ -97,9 +99,9 @@ exports.getNearbyRestaurants = async (req, res) => {
         distance: distanceKm ? distanceKm.toFixed(2) : null,
         deliveryTime,
         merchantId: restaurant._id,
-        isMenuAvailable,
-        isAvailable:"0",
-        availableFoods: formattedFoods, // Add available foods array
+        isMenuAvailable, // Now based on product availability
+        isAvailable: "1", // Since we're only returning restaurants with available foods
+        availableFoods: formattedFoods,
         image: {
           imageName:
             restaurant.images && restaurant.images.length > 0
@@ -109,12 +111,25 @@ exports.getNearbyRestaurants = async (req, res) => {
       };
     }));
 
+    // Filter out null entries (restaurants with no available foods)
+    const filteredRestaurants = restaurantsWithFoods.filter(restaurant => restaurant !== null);
+
+    if (filteredRestaurants.length === 0) {
+      return res.status(200).json({
+        message: "No nearby restaurants with available food items found.",
+        messageType: "success",
+        statusCode: 200,
+        count: 0,
+        data: []
+      });
+    }
+
     return res.status(200).json({
-      message: "Nearby restaurants fetched successfully.",
+      message: "Nearby restaurants with available food items fetched successfully.",
       messageType: "success",
       statusCode: 200,
-      count: responseData.length,
-      data: responseData
+      count: filteredRestaurants.length,
+      data: filteredRestaurants
     });
 
   } catch (error) {
@@ -126,6 +141,12 @@ exports.getNearbyRestaurants = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
 exports.getNearbyCategories = async (req, res) => {
   try {
     const { latitude, longitude, distance = 5000 } = req.query;
@@ -356,6 +377,7 @@ exports.getNearbyCategoriesMock = async (req, res) => {
   }
 };
 
+
 exports.getRecommendedRestaurants = async (req, res) => {
   try {
     const { latitude, longitude, maxDistance = 5000, minOrderAmount = 0 } = req.query;
@@ -398,7 +420,7 @@ exports.getRecommendedRestaurants = async (req, res) => {
         },
       },
       minOrderAmount: { $gte: minOrder },
-      active: true
+      active: true,
     })
       .sort({ rating: -1 })
       .limit(20);
@@ -412,43 +434,87 @@ exports.getRecommendedRestaurants = async (req, res) => {
       });
     }
 
-    // Clean response for frontend with delivery time calculation
-    const responseData = restaurants.map((restaurant) => {
-      const distanceKm = restaurant.location
-        ? getDistanceFromLatLonInKm(
-            lat,
-            lng,
-            restaurant.location.coordinates[1],
-            restaurant.location.coordinates[0]
-          )
-        : null;
+    // Get restaurants with available products
+    const restaurantsWithFoods = await Promise.all(
+      restaurants.map(async (restaurant) => {
+        const distanceKm = restaurant.location
+          ? getDistanceFromLatLonInKm(
+              lat,
+              lng,
+              restaurant.location.coordinates[1],
+              restaurant.location.coordinates[0]
+            )
+          : null;
 
-      // Delivery time estimate based on distance
-      let deliveryTime;
-      if (distanceKm <= 2) deliveryTime = "20 mins";
-      else if (distanceKm <= 5) deliveryTime = "30 mins";
-      else if (distanceKm <= 8) deliveryTime = "40 mins";
-      else deliveryTime = "50+ mins";
+        // Delivery time estimate based on distance
+        let deliveryTime;
+        if (distanceKm <= 2) deliveryTime = "20 mins";
+        else if (distanceKm <= 5) deliveryTime = "30 mins";
+        else if (distanceKm <= 8) deliveryTime = "40 mins";
+        else deliveryTime = "50+ mins";
 
-      return {
-        shopName: restaurant.name,
-        distance: distanceKm ? distanceKm.toFixed(2) : null,
-        deliveryTime,
-        merchantId: restaurant._id,
-        image: {
-          imageName:
-            restaurant.images && restaurant.images.length > 0
-              ? restaurant.images[0]
-              : "https://default-image-url.com/default.jpg",
-        },
-      };
-    });
+        // Check for available products
+        const availableFoods = await Product.find({
+          restaurantId: restaurant._id,
+          active: true,
+          stock: { $gt: 0 },
+        }).select("name price images foodType specialOffer");
+
+        const productCount = availableFoods.length;
+        const isMenuAvailable = productCount > 0 ? "1" : "0";
+
+        // If no available foods, return null (we'll filter these out)
+        if (availableFoods.length === 0) return null;
+
+        // Format food items for frontend
+        const formattedFoods = availableFoods.map((food) => ({
+          id: food._id,
+          name: food.name,
+          price: food.price,
+          image: food.images && food.images.length > 0 ? food.images[0] : null,
+          foodType: food.foodType,
+          discount: food.specialOffer?.discount || 0,
+        }));
+
+        return {
+          shopName: restaurant.name,
+          distance: distanceKm ? distanceKm.toFixed(2) : null,
+          deliveryTime,
+          merchantId: restaurant._id,
+          isMenuAvailable,
+          isAvailable: "1",
+          availableFoods: formattedFoods,
+          image: {
+            imageName:
+              restaurant.images && restaurant.images.length > 0
+                ? restaurant.images[0]
+                : "https://default-image-url.com/default.jpg",
+          },
+        };
+      })
+    ); // <== this closing bracket was missing in your code
+
+    // Filter out restaurants with no available products
+    const filteredRestaurants = restaurantsWithFoods.filter(
+      (restaurant) => restaurant !== null
+    );
+
+    if (filteredRestaurants.length === 0) {
+      return res.status(200).json({
+        messageType: "success",
+        message:
+          "No recommended restaurants with available food items found in your area.",
+        count: 0,
+        data: [],
+      });
+    }
 
     return res.status(200).json({
       messageType: "success",
-      message: "Recommended restaurants fetched successfully.",
-      count: responseData.length,
-      data: responseData,
+      message:
+        "Recommended restaurants with available food items fetched successfully.",
+      count: filteredRestaurants.length,
+      data: filteredRestaurants,
     });
   } catch (error) {
     console.error("Error fetching recommended restaurants:", error);
