@@ -324,11 +324,25 @@ exports.getRestaurantById = async (req, res) => {
       });
     }
 
-    // Convert necessary fields to strings
+    // Process images array to return a single random image as string
+    let featuredImage = "";
+    if (restaurant.images && restaurant.images.length > 0) {
+      // Select random image from array
+      const randomIndex = Math.floor(Math.random() * restaurant.images.length);
+      featuredImage = restaurant.images[randomIndex];
+    }
+
+    // Prepare response data
     const responseData = {
       ...restaurant,
-      _id: restaurant._id.toString()
+      _id: restaurant._id.toString(),
+      image: featuredImage, // Single image string instead of array
+      // Remove the original images array since we're sending just one image
+      images: undefined
     };
+
+    // Remove undefined fields
+    delete responseData.images;
 
     res.status(200).json({
       messageType: "success",
