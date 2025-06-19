@@ -285,6 +285,8 @@ exports.deleteRestaurant = async (req, res) => {
     
   }
 }
+
+
 exports.getRestaurantById = async (req, res) => {
   try {
     const { restaurantId } = req.params;
@@ -297,7 +299,31 @@ exports.getRestaurantById = async (req, res) => {
     }
 
     const restaurant = await Restaurant.findById(restaurantId)
-      .select("-ownerId -kycDocuments -serviceAreas -openingHours -__v");
+      .select({
+        "address": 1,
+        "location": 1,
+        "name": 1,
+        "images": 1,
+        "phone": 1,
+        "email": 1,
+        "foodType": 1,
+        "merchantSearchName": 1,
+        "rating": 1,
+        "minOrderAmount": 1,
+        "paymentMethods": 1,
+        "preparationTime": 1,
+        "commission": 1,
+        "active": 1,
+        "approvalStatus": 1,
+        "createdAt": 1,
+        "updatedAt": 1,
+        "businessHours": 1,
+        "categories": 1,
+        "products": 1,
+        "offers": 1,
+        "banners": 1
+      })
+      .lean();
 
     if (!restaurant) {
       return res.status(404).json({
@@ -306,10 +332,18 @@ exports.getRestaurantById = async (req, res) => {
       });
     }
 
+    // Convert necessary fields to strings
+    const responseData = {
+      ...restaurant,
+      _id: restaurant._id.toString(),
+      createdAt: restaurant.createdAt?.toISOString(),
+      updatedAt: restaurant.updatedAt?.toISOString()
+    };
+
     res.status(200).json({
       messageType: "success",
       message: "Restaurant fetched successfully.",
-      data: restaurant
+      data: responseData
     });
 
   } catch (error) {
