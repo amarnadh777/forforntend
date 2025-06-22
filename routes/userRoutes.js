@@ -18,7 +18,7 @@ router.post("/login", loginUser);
 router.post("/address",protect,addAddress)
 router.put("/address/:addressId",protect,updateAddressById)
 router.delete("/address/:addressId",protect,deleteAddressById)
-router.get("/adderss/:userId",protect,getAddress)
+router.get("/adderss",protect,getAddress)
 router.post("/forgot-password",forgotPassword)
 router.post("/forgot-password/verify-otp", verifyForgotPasswordOtp);
 router.post("/reset-password",resetPassword)

@@ -156,7 +156,7 @@ const userSchema = new mongoose.Schema(
     resetPasswordExpires: Date,
 
     loginOtp: { type: String },
-loginOtpExpiresAt: { type: Date },
+   loginOtpExpiresAt: { type: Date },
 
     loginAttempts: {
       count: { type: Number, default: 0 },
