@@ -144,22 +144,22 @@ exports.verifyOtp = async (req, res) => {
 };
 
 
+
 exports.getUserDetails = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    if (!userId) {
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: false,
-        message: "User ID is required",
+        message: "Invalid or missing User ID",
         messageType: "failure"
       });
     }
 
-    // Fetch user by ID — exclude sensitive fields like password and reset tokens
     const user = await User.findById(userId)
       .select('-password -resetPasswordToken -resetPasswordExpires')
-      .lean(); // lean() returns plain JS object instead of Mongoose document
+      .lean();
 
     if (!user) {
       return res.status(404).json({
@@ -169,47 +169,50 @@ exports.getUserDetails = async (req, res) => {
       });
     }
 
-    // Prepare addresses with proper lat-lon formatting
+    // Helper to safely convert any value to string (including null/undefined)
+    const toStringSafe = (value) => (value !== undefined && value !== null) ? String(value) : "";
+
+    // Format addresses with string lat/lon
     const formattedAddresses = (user.addresses || []).map(addr => {
-      let lat = null;
-      let lon = null;
+      let lat = "";
+      let lon = "";
 
       if (addr.location && Array.isArray(addr.location.coordinates)) {
         [lon, lat] = addr.location.coordinates;
       }
 
       return {
-        addressId: addr._id,
-        type: addr.type || null,
-        street: addr.street || null,
-        city: addr.city || null,
-        state: addr.state || null,
-        zip: addr.zip || null,
+        addressId: toStringSafe(addr._id),
+        type: toStringSafe(addr.type),
+        street: toStringSafe(addr.street),
+        city: toStringSafe(addr.city),
+        state: toStringSafe(addr.state),
+        zip: toStringSafe(addr.zip),
         location: {
-          latitude: lat,
-          longitude: lon
+          latitude: toStringSafe(lat),
+          longitude: toStringSafe(lon)
         }
       };
     });
 
-    // Build final response object
+    // Construct final response object — all values stringified
     const userDetails = {
-      userId: user._id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      userType: user.userType,
-      profilePicture: user.profilePicture,
-      walletBalance: user.walletBalance,
-      loyaltyPoints: user.loyaltyPoints,
+      userId: toStringSafe(user._id),
+      name: toStringSafe(user.name),
+      email: toStringSafe(user.email),
+      phone: toStringSafe(user.phone),
+      userType: toStringSafe(user.userType),
+      profilePicture: toStringSafe(user.profilePicture),
+      walletBalance: toStringSafe(user.walletBalance),
+      loyaltyPoints: toStringSafe(user.loyaltyPoints),
       addresses: formattedAddresses,
-      deviceTokens: user.deviceTokens,
-      lastActivity: user.lastActivity,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt
+      deviceTokens: (user.deviceTokens || []).map(toStringSafe),
+      lastActivity: toStringSafe(user.lastActivity),
+      createdAt: toStringSafe(user.createdAt),
+      updatedAt: toStringSafe(user.updatedAt)
     };
 
-    // Send success response
+    // Send final success response
     return res.status(200).json({
       success: true,
       message: "User details fetched successfully",
@@ -227,6 +230,107 @@ exports.getUserDetails = async (req, res) => {
   }
 };
 
+
+
+
+
+exports.updateUserDetails = async (req, res) => {
+  try {
+    const userId = req.user._id;
+  console.log(userId )
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or missing User ID",
+        messageType: "failure",
+      });
+    }
+
+    // Dynamic update fields
+    const updateFields = {};
+    if (req.body.name !== undefined) updateFields.name = toStringSafe(req.body.name);
+    if (req.body.email !== undefined) updateFields.email = toStringSafe(req.body.email);
+    if (req.body.phone !== undefined) updateFields.phone = toStringSafe(req.body.phone);
+    if (req.body.profilePicture !== undefined) updateFields.profilePicture = toStringSafe(req.body.profilePicture);
+
+    // // If no fields sent — reject request
+    // if (Object.keys(updateFields).length === 0) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "No valid fields provided for update",
+    //     messageType: "failure",
+    //   });
+    // }
+
+    updateFields.updatedAt = new Date();
+
+    const updatedUser = await User.findByIdAndUpdate(userId, updateFields, {
+      new: true,
+    })
+      .select("-password -resetPasswordToken -resetPasswordExpires")
+      .lean();
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+        messageType: "failure",
+      });
+    }
+
+    // Format addresses
+    const formattedAddresses = (updatedUser.addresses || []).map((addr) => {
+      let lat = null, lon = null;
+      if (addr.location && Array.isArray(addr.location.coordinates)) {
+        [lon, lat] = addr.location.coordinates;
+      }
+
+      return {
+        addressId: toStringSafe(addr._id),
+        type: toStringSafe(addr.type),
+        street: toStringSafe(addr.street),
+        city: toStringSafe(addr.city),
+        state: toStringSafe(addr.state),
+        zip: toStringSafe(addr.zip),
+        location: {
+          latitude: toStringSafe(lat),
+          longitude: toStringSafe(lon),
+        },
+      };
+    });
+
+    const userDetails = {
+      userId: toStringSafe(updatedUser._id),
+      name: toStringSafe(updatedUser.name),
+      email: toStringSafe(updatedUser.email),
+      phone: toStringSafe(updatedUser.phone),
+      userType: toStringSafe(updatedUser.userType),
+      profilePicture: toStringSafe(updatedUser.profilePicture),
+      walletBalance: toStringSafe(updatedUser.walletBalance),
+      loyaltyPoints: toStringSafe(updatedUser.loyaltyPoints),
+      addresses: formattedAddresses,
+      deviceTokens: (updatedUser.deviceTokens || []).map(toStringSafe),
+      lastActivity: toStringSafe(updatedUser.lastActivity),
+      createdAt: toStringSafe(updatedUser.createdAt),
+      updatedAt: toStringSafe(updatedUser.updatedAt),
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: "User details updated successfully",
+      messageType: "success",
+      data: userDetails,
+    });
+
+  } catch (error) {
+    console.error("Error updating user details:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong on the server",
+      messageType: "failure",
+    });
+  }
+};
 
 
 
@@ -382,23 +486,23 @@ exports.addAddress = async (req, res) => {
   }
 };
 
-exports.deleteAddressById = async (req, res) => {
+exports.getUserDetails = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { addressId } = req.params;
 
-    // Validate essentials
-    if (!userId) {
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: false,
-        message: "userId is required",
+        message: "Invalid or missing User ID",
         messageType: "failure"
       });
     }
 
-    // Find the user
-    const userExist = await User.findById(userId);
-    if (!userExist) {
+    const user = await User.findById(userId)
+      .select('-password -resetPasswordToken -resetPasswordExpires')
+      .lean();
+
+    if (!user) {
       return res.status(404).json({
         success: false,
         message: "User not found",
@@ -406,54 +510,59 @@ exports.deleteAddressById = async (req, res) => {
       });
     }
 
-    // Check if address exists
-    const addressExists = userExist.addresses.id(addressId);
-    if (!addressExists) {
-      return res.status(404).json({
-        success: false,
-        message: "Address not found",
-        messageType: "failure"
-      });
-    }
+    // Helper to safely convert any value to string (including null/undefined)
+    const toStringSafe = (value) => (value !== undefined && value !== null) ? String(value) : "";
 
-    // Remove the address using pull
-    userExist.addresses.pull({ _id: addressId });
-
-    // Save the updated user
-    await userExist.save();
-
-    // Prepare updated addresses
-    const updatedAddresses = (userExist.addresses || []).map(addr => {
-      let lat = null;
-      let lon = null;
+    // Format addresses with string lat/lon
+    const formattedAddresses = (user.addresses || []).map(addr => {
+      let lat = "";
+      let lon = "";
 
       if (addr.location && Array.isArray(addr.location.coordinates)) {
         [lon, lat] = addr.location.coordinates;
       }
 
       return {
-        addressId: addr._id,
-        type: addr.type || null,
-        street: addr.street || null,
-        city: addr.city || null,
-        state: addr.state || null,
-        zip: addr.zip || null,
+        addressId: toStringSafe(addr._id),
+        type: toStringSafe(addr.type),
+        street: toStringSafe(addr.street),
+        city: toStringSafe(addr.city),
+        state: toStringSafe(addr.state),
+        zip: toStringSafe(addr.zip),
         location: {
-          latitude: lat,
-          longitude: lon
+          latitude: toStringSafe(lat),
+          longitude: toStringSafe(lon)
         }
       };
     });
 
-    // Success response
+    // Construct final response object — all values stringified
+    const userDetails = {
+      userId: toStringSafe(user._id),
+      name: toStringSafe(user.name),
+      email: toStringSafe(user.email),
+      phone: toStringSafe(user.phone),
+      userType: toStringSafe(user.userType),
+      profilePicture: toStringSafe(user.profilePicture),
+      walletBalance: toStringSafe(user.walletBalance),
+      loyaltyPoints: toStringSafe(user.loyaltyPoints),
+      addresses: formattedAddresses,
+      deviceTokens: (user.deviceTokens || []).map(toStringSafe),
+      lastActivity: toStringSafe(user.lastActivity),
+      createdAt: toStringSafe(user.createdAt),
+      updatedAt: toStringSafe(user.updatedAt)
+    };
+
+    // Send final success response
     return res.status(200).json({
       success: true,
-      message: "Address deleted successfully",
-      messageType: "success"
+      message: "User details fetched successfully",
+      messageType: "success",
+      data: userDetails
     });
 
   } catch (error) {
-    console.error("Error deleting address:", error);
+    console.error("Error fetching user details:", error);
     return res.status(500).json({
       success: false,
       message: "Something went wrong on the server",
@@ -1096,3 +1205,42 @@ exports.getFavouriteRestaurants = async (req, res) => {
 
 
 
+
+
+
+
+
+exports.updateUserProfile = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Build the update object based on what fields are present in req.body
+    const updateFields = {};
+    if (req.body.name !== undefined) updateFields.name = req.body.name;
+    if (req.body.email !== undefined) updateFields.email = req.body.email;
+    if (req.body.phone !== undefined) updateFields.phone = req.body.phone;
+
+    // Return an error if no fields are provided
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).json({ message: "No fields to update" });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      updateFields,
+      { new: true, runValidators: true }
+    ).select("name email phone");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      message: "User profile updated successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Error updating user profile:", error);
+    res.status(500).json({ message: "Something went wrong" });
+  }
+};

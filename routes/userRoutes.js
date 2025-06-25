@@ -4,7 +4,8 @@ const { registerUser, verifyOtp, loginUser,addAddress, deleteAddressById,editadd
      addFavouriteRestaurant,
     getFavouriteRestaurants,
     removeFavouriteRestaurant,
-    getAddress,getUserDetails
+    getAddress,getUserDetails,
+    updateUserDetails
 } = require("../controllers/userControllers");
 const bruteForcePrevent = require("../middlewares/bruteforcePrevent");
 const {verifyToken} = require("../middlewares/auth");
@@ -15,9 +16,13 @@ router.post("/verify-otp", verifyOtp);
 router.post("/resend-otp", resendOtp);
 router.post("/login", loginUser);
 
+router.get("/profile", protect,getUserDetails);
+router.put("/profile",protect,updateUserDetails)
+
+
 router.post("/address",protect,addAddress)
 router.put("/address/:addressId",protect,updateAddressById)
-router.delete("/address/:addressId",protect,deleteAddressById)
+// router.delete("/address/:addressId",protect,deleteAddressById)
 router.get("/address",protect,getAddress)
 router.post("/forgot-password",forgotPassword)
 router.post("/forgot-password/verify-otp", verifyForgotPasswordOtp);

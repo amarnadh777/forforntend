@@ -1,7 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const {createCategory,getAResturantCategories,editResturantCategory,deleteResturantCategory} = require('../controllers/categoryController')
-const {createRestaurant,updateRestaurant,deleteRestaurant,getRestaurantById, updateBusinessHours,addServiceArea,getRestaurantMenu}  = require('../controllers/restaurantController')
+const {createRestaurant,updateRestaurant,deleteRestaurant,getRestaurantById, updateBusinessHours,addServiceArea,getRestaurantMenu, updateOpeningHours}  = require('../controllers/restaurantController')
 // restaurant routes
 
 router.post("/",createRestaurant)

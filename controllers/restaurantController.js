@@ -358,6 +358,22 @@ exports.getRestaurantById = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // Enable merchants to set and update their daily and weekly business hours.
 exports.updateBusinessHours = async (req, res) => {
   try {
