@@ -22,7 +22,7 @@ router.put("/profile",protect,updateUserDetails)
 
 router.post("/address",protect,addAddress)
 router.put("/address/:addressId",protect,updateAddressById)
-// router.delete("/address/:addressId",protect,deleteAddressById)
+router.delete("/address/:addressId",protect,deleteAddressById)
 router.get("/address",protect,getAddress)
 router.post("/forgot-password",forgotPassword)
 router.post("/forgot-password/verify-otp", verifyForgotPasswordOtp);

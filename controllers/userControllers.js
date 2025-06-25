@@ -1244,3 +1244,55 @@ exports.updateUserProfile = async (req, res) => {
     res.status(500).json({ message: "Something went wrong" });
   }
 };
+
+
+
+
+
+exports.deleteAddressById = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const addressId = req.params.addressId;
+
+    // Validate IDs
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(addressId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID or address ID",
+        messageType: "failure",
+      });
+    }
+
+    // Find user and remove address by its _id
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: userId },
+      { $pull: { addresses: { _id: addressId } } },
+      { new: true }
+    )
+    .select('-password -resetPasswordToken -resetPasswordExpires')
+    .lean();
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+        messageType: "failure",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Address deleted successfully",
+      messageType: "success",
+  
+    });
+
+  } catch (error) {
+    console.error("Error deleting address:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong on the server",
+      messageType: "failure",
+    });
+  }
+};
