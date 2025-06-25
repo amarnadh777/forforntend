@@ -6,6 +6,7 @@ const { sendEmail } = require("../utils/sendEmail");
 const { sendSms } = require("../utils/sendSms");
 const Favourite = require("../models/favouriteModel")
 const Restaurant = require("../models/restaurantModel")
+const mongoose = require('mongoose')
 
 // Register user with validations, OTP generation and notifications
 exports.registerUser = async (req, res) => {
