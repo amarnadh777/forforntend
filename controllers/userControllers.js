@@ -7,6 +7,8 @@ const { sendSms } = require("../utils/sendSms");
 const Favourite = require("../models/favouriteModel")
 const Restaurant = require("../models/restaurantModel")
 const mongoose = require('mongoose')
+const { toStringSafe } = require("../utils/toStringSafe");
+
 
 // Register user with validations, OTP generation and notifications
 exports.registerUser = async (req, res) => {
@@ -171,7 +173,7 @@ exports.getUserDetails = async (req, res) => {
     }
 
     // Helper to safely convert any value to string (including null/undefined)
-    const toStringSafe = (value) => (value !== undefined && value !== null) ? String(value) : "";
+
 
     // Format addresses with string lat/lon
     const formattedAddresses = (user.addresses || []).map(addr => {
