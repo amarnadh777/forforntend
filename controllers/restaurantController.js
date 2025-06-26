@@ -2,6 +2,8 @@ const Restaurant = require("../models/restaurantModel")
 const Category = require("../models/categoryModel")
 const Product = require("../models/productModel")
 const mongoose = require("mongoose");
+
+const { formatMinutesToReadable } = require("../utils/timeFormatter");
 exports.createRestaurant = async (req, res) => {
   try {
     const {
@@ -286,9 +288,29 @@ exports.deleteRestaurant = async (req, res) => {
   }
 }
 
+
+
+
+
+
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+
+
 exports.getRestaurantById = async (req, res) => {
   try {
     const { restaurantId } = req.params;
+    const { lat, lng } = req.query;
 
     if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
       return res.status(400).json({
@@ -299,21 +321,9 @@ exports.getRestaurantById = async (req, res) => {
 
     const restaurant = await Restaurant.findById(restaurantId)
       .select({
-        "_id": 1,
-        "name": 1,
-        "images": 1,
-        "address": 1,
-        "location": 1,
-        "phone": 1,
-        "email": 1,
-        "active": 1,
-        "foodType": 1,
-        "banners": 1,
-        "merchantSearchName": 1,
-        "rating": 1,
-        "minOrderAmount": 1,
-        "paymentMethods": 1,
-        "offers": 1
+        "_id": 1, "name": 1, "images": 1, "address": 1, "location": 1, "phone": 1, "email": 1,
+        "active": 1, "foodType": 1, "banners": 1, "merchantSearchName": 1, "rating": 1,
+        "minOrderAmount": 1, "paymentMethods": 1, "offers": 1
       })
       .lean();
 
@@ -324,27 +334,44 @@ exports.getRestaurantById = async (req, res) => {
       });
     }
 
-    // Process images array to return a single random image as string
+    // Random featured image
     let featuredImage = "";
     if (restaurant.images && restaurant.images.length > 0) {
-      // Select random image from array
       const randomIndex = Math.floor(Math.random() * restaurant.images.length);
       featuredImage = restaurant.images[randomIndex];
     }
 
-    // Prepare response data
     const responseData = {
       ...restaurant,
       _id: restaurant._id.toString(),
-      image: featuredImage, // Single image string instead of array
-      // Remove the original images array since we're sending just one image
-      images: undefined
+      image: featuredImage
     };
 
-    // Remove undefined fields
-    delete responseData.images;
+    // Distance & delivery time if coords provided
+    if (
+      lat && lng &&
+      restaurant.location?.coordinates &&
+      restaurant.location.coordinates.length === 2
+    ) {
+      const [restaurantLng, restaurantLat] = restaurant.location.coordinates;
 
-    res.status(200).json({
+      const distanceKm = Number(
+        getDistanceFromLatLonInKm(
+          parseFloat(lat),
+          parseFloat(lng),
+          restaurantLat,
+          restaurantLng
+        ).toFixed(2)
+      );
+
+      const estimatedDeliveryTimeMin = Math.ceil((distanceKm / 25) * 60);
+      const estimatedDeliveryTimeStr = formatMinutesToReadable(estimatedDeliveryTimeMin);
+
+      responseData.distanceKm = `${distanceKm} km`;   // as string with unit
+      responseData.estimatedDeliveryTime = estimatedDeliveryTimeStr;
+    }
+
+    return res.status(200).json({
       messageType: "success",
       message: "Restaurant fetched successfully.",
       data: responseData
@@ -352,24 +379,12 @@ exports.getRestaurantById = async (req, res) => {
 
   } catch (error) {
     console.error("Error fetching restaurant by ID:", error);
-    res.status(500).json({
+    return res.status(500).json({
       messageType: "failure",
       message: "Internal server error."
     });
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -444,6 +459,10 @@ exports.addKyc = async (req, res) => {
 exports.addServiceArea = async (req, res) => {
  
 };
+
+
+
+
 
 
 exports.getRestaurantMenu = async (req, res) => {
