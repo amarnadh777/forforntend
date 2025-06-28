@@ -57,3 +57,105 @@ exports.calculateOrderCost = ({ cartProducts, restaurant, userCoords, couponCode
     distanceKm: Math.round(distanceKm * 100) / 100, // keep 2 decimals for distance if needed
   };
 };
+
+
+
+
+
+
+
+
+
+
+
+exports.calculateOrderCostV2 = ({
+  cartProducts,
+  tipAmount = 0,
+  couponCode,
+  deliveryFee = 0,
+  offers = [],
+  revenueShare = { type: 'percentage', value: 20 },
+  taxes = [],  // ✅ now an array of tax objects
+  isSurge = false,
+  surgeFeeAmount = 0,
+  surgeReason = null
+}) => {
+  let cartTotal = 0;
+  cartProducts.forEach(item => {
+    cartTotal += item.price * item.quantity;
+  });
+
+  // Offers
+  let offerDiscount = 0;
+  let appliedOffer = null;
+  if (offers.length) {
+    offers.forEach(offer => {
+      let discount = 0;
+      if (offer.type === "flat") {
+        discount = offer.discountValue;
+      } else if (offer.type === "percentage") {
+        discount = (cartTotal * offer.discountValue) / 100;
+        if (offer.maxDiscount) {
+          discount = Math.min(discount, offer.maxDiscount);
+        }
+      }
+      if (discount > offerDiscount) {
+        offerDiscount = discount;
+        appliedOffer = offer;
+      }
+    });
+  }
+
+  // Coupons
+  let couponDiscount = 0;
+  if (couponCode) {
+    if (couponCode === "WELCOME50") {
+      couponDiscount = 50;
+    } else if (couponCode === "FREEDLV") {
+      couponDiscount = deliveryFee;
+    }
+  }
+
+  const taxableAmount = cartTotal - offerDiscount;
+
+  // ✅ Multiple Tax calculation
+  const taxBreakdown = taxes.map(tax => {
+    const amount = (taxableAmount * tax.percentage) / 100;
+    return {
+      name: tax.name,
+      percentage: tax.percentage,
+      amount
+    };
+  });
+
+  const totalTaxAmount = taxBreakdown.reduce((sum, t) => sum + t.amount, 0);
+
+  const surgeFee = isSurge ? surgeFeeAmount : 0;
+
+  const finalAmountBeforeRevenueShare = taxableAmount + deliveryFee + tipAmount + totalTaxAmount + surgeFee - couponDiscount;
+
+  let revenueShareAmount = 0;
+  if (revenueShare.type === 'percentage') {
+    revenueShareAmount = (finalAmountBeforeRevenueShare * revenueShare.value) / 100;
+  } else if (revenueShare.type === 'fixed') {
+    revenueShareAmount = revenueShare.value;
+  }
+
+  return {
+    cartTotal,
+    deliveryFee,
+    tipAmount,
+    taxBreakdown,     // detailed taxes
+    totalTaxAmount,   // total tax
+    surgeFee,
+    offerDiscount,
+    couponDiscount,
+    offersApplied: appliedOffer ? [appliedOffer.title] : [],
+    finalAmount: finalAmountBeforeRevenueShare,
+    revenueShareAmount,
+    isSurge,
+    surgeReason,
+    appliedOffer
+  };
+};
+

@@ -2,14 +2,17 @@ const Order = require("../models/orderModel");
 const Cart = require("../models/cartModel");
 const Restaurant = require("../models/restaurantModel");
 const User = require("../models/userModel");
-const { calculateOrderCost } = require("../services/orderCostCalculator");
-
+const { calculateOrderCost, calculateOrderCostV2 } = require("../services/orderCostCalculator");
+const turf = require("@turf/turf");
 // Create Orderconst Product = require("../models/FoodItem"); // Your product model
 const mongoose = require("mongoose");
 const Product = require("../models/productModel");
 const restaurantService = require("../services/restaurantService");
 const productService = require("../services/productService");
 const isLocationInServiceArea = require("../services/isLocationInServiceArea");
+const { getApplicableSurgeFee } = require("../services/surgeCalculator");
+const feeService = require("../services/feeService")
+const Offer = require("../models/offerModel")
 exports.createOrder = async (req, res) => {
   try {
     const { customerId, restaurantId, orderItems, paymentMethod, location } =
@@ -647,65 +650,122 @@ exports.getCustomerOrderStatus = async (req, res) => {
       .json({ message: "Server error while fetching order status" });
   }
 };
-
 exports.getOrderPriceSummary = async (req, res) => {
   try {
-    const { longitude, latitude, couponCode, cartId, userId } = req.body;
+    const { longitude, latitude, couponCode, cartId, tipAmount = 0 } = req.body;
+    const userId = req.user._id;
 
     if (!cartId || !userId) {
-      return res
-        .status(400)
-        .json({
-          message: "cartId and userId are required",
-          messageType: "failure",
-        });
+      return res.status(400).json({
+        message: "cartId and userId are required",
+        messageType: "failure",
+      });
     }
 
     const cart = await Cart.findOne({ _id: cartId, user: userId });
     if (!cart) {
-      return res
-        .status(404)
-        .json({
-          message: "Cart not found for this user",
-          messageType: "failure",
-        });
+      return res.status(404).json({
+        message: "Cart not found for this user",
+        messageType: "failure",
+      });
     }
 
     if (!cart.products || cart.products.length === 0) {
-      return res
-        .status(400)
-        .json({ message: "Cart is empty", messageType: "failure" });
+      return res.status(400).json({
+        message: "Cart is empty",
+        messageType: "failure",
+      });
     }
 
     const restaurant = await Restaurant.findById(cart.restaurantId);
     if (!restaurant) {
-      return res
-        .status(404)
-        .json({ message: "Restaurant not found", messageType: "failure" });
+      return res.status(404).json({
+        message: "Restaurant not found",
+        messageType: "failure",
+      });
     }
 
     const userCoords = [parseFloat(longitude), parseFloat(latitude)];
+    const restaurantCoords = restaurant.location.coordinates;
 
-    const costSummary = calculateOrderCost({
+    const preSurgeOrderAmount = cart.products.reduce(
+      (total, item) => total + item.price * item.quantity,
+      0
+    );
+
+    const surgeObj = await getApplicableSurgeFee(userCoords, preSurgeOrderAmount);
+    const isSurge = !!surgeObj;
+    const surgeFeeAmount = surgeObj ? surgeObj.fee : 0;
+
+    const deliveryFee = await feeService.calculateDeliveryFee(
+      restaurantCoords,
+      userCoords
+    );
+
+    const offers = await Offer.find({
+      applicableRestaurants: restaurant._id,
+      isActive: true,
+      validFrom: { $lte: new Date() },
+      validTill: { $gte: new Date() },
+    }).lean();
+
+    const foodTax = await feeService.getActiveTaxes("food");
+
+    const costSummary = calculateOrderCostV2({
       cartProducts: cart.products,
-      restaurant,
-      userCoords,
+      tipAmount,
       couponCode,
+      restaurantCoords,
+      deliveryFee: deliveryFee,
+      userCoords,
+      offers,
+      revenueShare: { type: "percentage", value: 20 },
+      taxes: foodTax,
+      isSurge,
+      surgeFeeAmount,
     });
 
-    // Convert all values to string
-    const stringSummary = Object.fromEntries(
-      Object.entries(costSummary).map(([key, value]) => [key, value.toString()])
+    const distanceKm = turf.distance(
+      turf.point(userCoords),
+      turf.point(restaurantCoords),
+      { units: "kilometers" }
     );
+     const isOffer = costSummary.offersApplied.length > 0 ? "1" : "0";
+    // ✅ Convert all values to string or 1/0 for booleans for Flutter-friendly format
+    const summary = {
+      deliveryFee: costSummary.deliveryFee.toFixed(2),
+      discount: costSummary.offerDiscount.toFixed(2),
+      distanceKm: distanceKm.toFixed(2),
+      subtotal: costSummary.cartTotal.toFixed(2),
+      tax: costSummary.totalTaxAmount.toFixed(2),
+      totalTaxAmount: costSummary.totalTaxAmount.toFixed(2),
+      surgeFee: costSummary.surgeFee.toFixed(2),
+      total: costSummary.finalAmount.toFixed(2),
+      tipAmount: costSummary.tipAmount.toFixed(2),
+      isSurge: isSurge ? "1" : "0",
+      surgeReason: surgeObj ? surgeObj.reason : "",
+      offersApplied: costSummary.offersApplied.length
+        ? costSummary.offersApplied.join(", ")
+        : "",
+      isOffer: isOffer, 
+      taxes: costSummary.taxBreakdown.map((tax) => ({
+        name: tax.name,
+        percentage: tax.percentage.toFixed(2),
+        amount: tax.amount.toFixed(2),
+      })),
+    };
 
     return res.status(200).json({
       message: "Bill summary calculated successfully",
       messageType: "success",
-      data: stringSummary,
+      data: summary,
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "server error", messageType: "failure" });
+    return res.status(500).json({
+      message: "Server error",
+      messageType: "failure",
+    });
   }
 };
 
