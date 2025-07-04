@@ -378,7 +378,7 @@ exports.getOrderById = async (req, res) => {
 exports.getOrderDetails = async (req, res) => {
   try {
     const orderId = req.params.orderId;
-    const userId = req.user._id; // Assuming you have user auth middleware
+    const userId = req.user._id;
 
     if (!mongoose.Types.ObjectId.isValid(orderId)) {
       return res.status(400).json({
@@ -402,16 +402,6 @@ exports.getOrderDetails = async (req, res) => {
       });
     }
 
-    // Verify the requesting user has access to this order
-    // if (order.customerId._id.toString() !== userId.toString() && 
-    //     !req.user.roles.includes('admin') && 
-    //     !req.user.roles.includes('restaurant')) {
-    //   return res.status(403).json({
-    //     message: "Unauthorized to view this order",
-    //     messageType: "failure"
-    //   });
-    // }
-
     // Format the response
     const response = {
       orderId: order._id,
@@ -433,13 +423,14 @@ exports.getOrderDetails = async (req, res) => {
       status: {
         current: order.orderStatus,
         agentAssignment: order.agentAssignmentStatus,
-        payment: order.paymentStatus
+        payment: order.paymentStatus,
+        isAgentAssigned: !!order.assignedAgent // Flag to show if agent is assigned (1 or 0)
       },
       timeline: {
         orderTime: order.orderTime,
         deliveryTime: order.deliveryTime,
         preparationTime: order.preparationTime,
-        estimatedDeliveryTime: order.deliveryTime // You might want to calculate this
+        estimatedDeliveryTime: order.deliveryTime
       },
       payment: {
         method: order.paymentMethod,
@@ -450,16 +441,17 @@ exports.getOrderDetails = async (req, res) => {
         } : null,
         walletUsed: order.walletUsed
       },
+      // Separate agent details object (null if no agent assigned)
+      agentDetails: order.assignedAgent ? {
+        id: order.assignedAgent._id,
+        name: order.assignedAgent.fullName,
+        phone: order.assignedAgent.phoneNumber,
+        vehicleType: order.assignedAgent.vehicleType
+      } : null,
       delivery: {
         address: order.deliveryAddress,
         location: order.deliveryLocation,
-        mode: order.deliveryMode,
-        agent: order.assignedAgent ? {
-          id: order.assignedAgent._id,
-          name: order.assignedAgent.fullName,
-          phone: order.assignedAgent.phoneNumber,
-          vehicle: order.assignedAgent.vehicleType
-        } : null
+        mode: order.deliveryMode
       },
       offers: order.offerId ? {
         id: order.offerId._id,
@@ -497,9 +489,6 @@ exports.getOrderDetails = async (req, res) => {
     });
   }
 };
-
-
-
 
 
 
