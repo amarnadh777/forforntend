@@ -377,7 +377,7 @@ exports.getOrderById = async (req, res) => {
 
 exports.getOrderDetails = async (req, res) => {
   try {
-    const orderId = req.params.id;
+    const orderId = req.params.orderId;
     const userId = req.user._id; // Assuming you have user auth middleware
 
     if (!mongoose.Types.ObjectId.isValid(orderId)) {

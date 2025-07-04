@@ -39,7 +39,7 @@ router.post('/create', createOrder); // Create new order
 // router.post("/place-order", protect, placeOrder)
 
 router.get('/', getAllOrders); // Admin - get all orders
-router.get('/:orderId', getOrderById); // Get specific order
+// router.get('/:orderId', getOrderById); // Get specific order
 
 
 router.post("/pricesummary", protect, getOrderPriceSummary)
@@ -49,6 +49,6 @@ router.post("/pricesummary/:addessId", protect,getOrderPriceSummaryByaddressId)
 router.get("/customer/orders", protect,getPastOrders)
 router.post("/place-order",protect,placeOrderV2)
 router.post("/place-order-byaddressId",protect,placeOrderByAddressId)
-router.post("/:orderId",protect,protect,getOrderDetails)
+router.get("/:orderId",protect,getOrderDetails)
 
 module.exports = router;
