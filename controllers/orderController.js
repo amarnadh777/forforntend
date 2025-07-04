@@ -12,7 +12,9 @@ const productService = require("../services/productService");
 const isLocationInServiceArea = require("../services/isLocationInServiceArea");
 const { getApplicableSurgeFee } = require("../services/surgeCalculator");
 const feeService = require("../services/feeService")
+const Permission = require("../models/restaurantPermissionModel")
 const Offer = require("../models/offerModel")
+const {assignTask} = require("../services/allocationService")
 exports.createOrder = async (req, res) => {
   try {
     const { customerId, restaurantId, orderItems, paymentMethod, location } =
@@ -133,228 +135,228 @@ exports.createOrder = async (req, res) => {
 };
 
 exports.placeOrder = async (req, res) => {
-  try {
-    const {
-      longitude,
-      latitude,
-      cartId,
-      userId,
-      paymentMethod,
-      couponCode,
-      instructions,
-      tipAmount = 0,
-      // Address fields
-      type = "Home", // Default to Home if not specified
-      receiverName,
-      receiverPhone,
-      area,
-      directionsToReach,
-      displayName,
-      street,
-      landmark,
-      city,
-      state,
-      pincode,
-      country = "India",
-    } = req.body;
+  // try {
+  //   const {
+  //     longitude,
+  //     latitude,
+  //     cartId,
+  //     userId,
+  //     paymentMethod,
+  //     couponCode,
+  //     instructions,
+  //     tipAmount = 0,
+  //     // Address fields
+  //     type = "Home", // Default to Home if not specified
+  //     receiverName,
+  //     receiverPhone,
+  //     area,
+  //     directionsToReach,
+  //     displayName,
+  //     street,
+  //     landmark,
+  //     city,
+  //     state,
+  //     pincode,
+  //     country = "India",
+  //   } = req.body;
 
-    // Basic validation
-    const requiredFields = {
-      cartId,
-      userId,
-      paymentMethod,
-      longitude,
-      latitude,
-      street,
-      city,
-      pincode,
-    };
+  //   // Basic validation
+  //   const requiredFields = {
+  //     cartId,
+  //     userId,
+  //     paymentMethod,
+  //     longitude,
+  //     latitude,
+  //     street,
+  //     city,
+  //     pincode,
+  //   };
 
-    const missingFields = Object.entries(requiredFields)
-      .filter(([_, value]) => !value)
-      .map(([key]) => key);
+  //   const missingFields = Object.entries(requiredFields)
+  //     .filter(([_, value]) => !value)
+  //     .map(([key]) => key);
 
-    if (missingFields.length > 0) {
-      return res.status(400).json({
-        message: `Missing required fields: ${missingFields.join(", ")}`,
-        messageType: "failure",
-      });
-    }
+  //   if (missingFields.length > 0) {
+  //     return res.status(400).json({
+  //       message: `Missing required fields: ${missingFields.join(", ")}`,
+  //       messageType: "failure",
+  //     });
+  //   }
 
-    // Validate coordinates
-    if (isNaN(parseFloat(longitude)) || isNaN(parseFloat(latitude))) {
-      return res.status(400).json({
-        message: "Invalid coordinates provided",
-        messageType: "failure",
-      });
-    }
+  //   // Validate coordinates
+  //   if (isNaN(parseFloat(longitude)) || isNaN(parseFloat(latitude))) {
+  //     return res.status(400).json({
+  //       message: "Invalid coordinates provided",
+  //       messageType: "failure",
+  //     });
+  //   }
 
-    const userCoords = [parseFloat(longitude), parseFloat(latitude)];
+  //   const userCoords = [parseFloat(longitude), parseFloat(latitude)];
 
-    // Validate coordinate ranges
-    if (
-      userCoords[0] < -180 ||
-      userCoords[0] > 180 ||
-      userCoords[1] < -90 ||
-      userCoords[1] > 90
-    ) {
-      return res.status(400).json({
-        message:
-          "Coordinates out of valid range (longitude: -180 to 180, latitude: -90 to 90)",
-        messageType: "failure",
-      });
-    }
+  //   // Validate coordinate ranges
+  //   if (
+  //     userCoords[0] < -180 ||
+  //     userCoords[0] > 180 ||
+  //     userCoords[1] < -90 ||
+  //     userCoords[1] > 90
+  //   ) {
+  //     return res.status(400).json({
+  //       message:
+  //         "Coordinates out of valid range (longitude: -180 to 180, latitude: -90 to 90)",
+  //       messageType: "failure",
+  //     });
+  //   }
 
-    // Find cart and restaurant
-    const cart = await Cart.findOne({ _id: cartId, user: userId });
-    if (!cart) {
-      return res.status(404).json({
-        message: "Cart not found",
-        messageType: "failure",
-      });
-    }
+  //   // Find cart and restaurant
+  //   const cart = await Cart.findOne({ _id: cartId, user: userId });
+  //   if (!cart) {
+  //     return res.status(404).json({
+  //       message: "Cart not found",
+  //       messageType: "failure",
+  //     });
+  //   }
 
-    const restaurant = await Restaurant.findById(cart.restaurantId);
-    if (!restaurant) {
-      return res.status(404).json({
-        message: "Restaurant not found",
-        messageType: "failure",
-      });
-    }
+  //   const restaurant = await Restaurant.findById(cart.restaurantId);
+  //   if (!restaurant) {
+  //     return res.status(404).json({
+  //       message: "Restaurant not found",
+  //       messageType: "failure",
+  //     });
+  //   }
 
-    // Calculate bill summary
-    const billSummary = calculateOrderCost({
-      cartProducts: cart.products,
-      restaurant,
-      userCoords,
-      couponCode,
-    });
+  //   // Calculate bill summary
+  //   const billSummary = calculateOrderCost({
+  //     cartProducts: cart.products,
+  //     restaurant,
+  //     userCoords,
+  //     couponCode,
+  //   });
 
-    // Map order items with product images
-    const orderItems = await Promise.all(
-      cart.products.map(async (item) => {
-        const product = await Product.findById(item.productId).select("images");
-        return {
-          productId: item.productId,
-          quantity: item.quantity,
-          price: item.price,
-          name: item.name,
-          totalPrice: item.price * item.quantity,
-          image: product?.images?.[0] || null,
-        };
-      })
-    );
+  //   // Map order items with product images
+  //   const orderItems = await Promise.all(
+  //     cart.products.map(async (item) => {
+  //       const product = await Product.findById(item.productId).select("images");
+  //       return {
+  //         productId: item.productId,
+  //         quantity: item.quantity,
+  //         price: item.price,
+  //         name: item.name,
+  //         totalPrice: item.price * item.quantity,
+  //         image: product?.images?.[0] || null,
+  //       };
+  //     })
+  //   );
 
-    // Create and save order with enhanced delivery address
-    const newOrder = new Order({
-      customerId: userId,
-      restaurantId: cart.restaurantId,
-      orderItems,
-      paymentMethod,
-      orderStatus: "pending",
-      deliveryLocation: { type: "Point", coordinates: userCoords },
-      deliveryAddress: {
-        type,
-        displayName: displayName || `${type} address`,
-        receiverName,
-        receiverPhone,
-        street,
-        area,
-        landmark,
-        directionsToReach,
-        city,
-        state,
-        pincode,
-        country,
-        latitude: parseFloat(latitude),
-        longitude: parseFloat(longitude),
-      },
-      subtotal: billSummary.subtotal,
-      tax: billSummary.tax,
-      discountAmount: billSummary.discount,
-      deliveryCharge: billSummary.deliveryFee,
-      surgeCharge: 0,
-      tipAmount,
-      totalAmount: billSummary.total + tipAmount,
-      distanceKm: billSummary.distanceKm,
-      couponCode,
-      instructions,
-    });
+  //   // Create and save order with enhanced delivery address
+  //   const newOrder = new Order({
+  //     customerId: userId,
+  //     restaurantId: cart.restaurantId,
+  //     orderItems,
+  //     paymentMethod,
+  //     orderStatus: "pending",
+  //     deliveryLocation: { type: "Point", coordinates: userCoords },
+  //     deliveryAddress: {
+  //       type,
+  //       displayName: displayName || `${type} address`,
+  //       receiverName,
+  //       receiverPhone,
+  //       street,
+  //       area,
+  //       landmark,
+  //       directionsToReach,
+  //       city,
+  //       state,
+  //       pincode,
+  //       country,
+  //       latitude: parseFloat(latitude),
+  //       longitude: parseFloat(longitude),
+  //     },
+  //     subtotal: billSummary.subtotal,
+  //     tax: billSummary.tax,
+  //     discountAmount: billSummary.discount,
+  //     deliveryCharge: billSummary.deliveryFee,
+  //     surgeCharge: 0,
+  //     tipAmount,
+  //     totalAmount: billSummary.total + tipAmount,
+  //     distanceKm: billSummary.distanceKm,
+  //     couponCode,
+  //     instructions,
+  //   });
 
-    const savedOrder = await newOrder.save();
+  //   const savedOrder = await newOrder.save();
 
-    // Clear the cart after successful order placement
-    await Cart.findByIdAndDelete(cartId);
+  //   // Clear the cart after successful order placement
+  //   await Cart.findByIdAndDelete(cartId);
 
-    // Format order data to string values
-    const formattedOrder = {
-      _id: savedOrder._id?.toString() || "",
-      customerId: savedOrder.customerId?.toString() || "",
-      restaurantId: savedOrder.restaurantId?.toString() || "",
-      orderItems: savedOrder.orderItems.map((item) => ({
-        productId: item.productId?.toString() || "",
-        quantity: item.quantity?.toString() || "0",
-        price: item.price?.toString() || "0",
-        name: item.name?.toString() || "",
-        totalPrice: item.totalPrice?.toString() || "0",
-        image: item.image ? item.image.toString() : "",
-      })),
-      paymentMethod: savedOrder.paymentMethod?.toString() || "",
-      orderStatus: savedOrder.orderStatus?.toString() || "",
-      deliveryLocation: {
-        type: savedOrder.deliveryLocation?.type?.toString() || "",
-        coordinates:
-          savedOrder.deliveryLocation?.coordinates?.map(
-            (coord) => coord?.toString() || "0"
-          ) || [],
-      },
-      deliveryAddress: {
-        type: savedOrder.deliveryAddress?.type?.toString() || "Home",
-        displayName: savedOrder.deliveryAddress?.displayName?.toString() || "",
-        receiverName:
-          savedOrder.deliveryAddress?.receiverName?.toString() || "",
-        receiverPhone:
-          savedOrder.deliveryAddress?.receiverPhone?.toString() || "",
-        street: savedOrder.deliveryAddress?.street?.toString() || "",
-        area: savedOrder.deliveryAddress?.area?.toString() || "",
-        landmark: savedOrder.deliveryAddress?.landmark?.toString() || "",
-        directionsToReach:
-          savedOrder.deliveryAddress?.directionsToReach?.toString() || "",
-        city: savedOrder.deliveryAddress?.city?.toString() || "",
-        state: savedOrder.deliveryAddress?.state?.toString() || "",
-        pincode: savedOrder.deliveryAddress?.pincode?.toString() || "",
-        country: savedOrder.deliveryAddress?.country?.toString() || "India",
-        latitude: savedOrder.deliveryAddress?.latitude?.toString() || "",
-        longitude: savedOrder.deliveryAddress?.longitude?.toString() || "",
-      },
-      subtotal: savedOrder.subtotal?.toString() || "0",
-      tax: savedOrder.tax?.toString() || "0",
-      discountAmount: savedOrder.discountAmount?.toString() || "0",
-      deliveryCharge: savedOrder.deliveryCharge?.toString() || "0",
-      surgeCharge: savedOrder.surgeCharge?.toString() || "0",
-      tipAmount: savedOrder.tipAmount?.toString() || "0",
-      totalAmount: savedOrder.totalAmount?.toString() || "0",
-      distanceKm: savedOrder.distanceKm?.toString() || "0",
-      couponCode: savedOrder.couponCode?.toString() || "",
-      instructions: savedOrder.instructions?.toString() || "",
-      createdAt: savedOrder.createdAt?.toISOString() || "",
-      updatedAt: savedOrder.updatedAt?.toISOString() || "",
-    };
+  //   // Format order data to string values
+  //   const formattedOrder = {
+  //     _id: savedOrder._id?.toString() || "",
+  //     customerId: savedOrder.customerId?.toString() || "",
+  //     restaurantId: savedOrder.restaurantId?.toString() || "",
+  //     orderItems: savedOrder.orderItems.map((item) => ({
+  //       productId: item.productId?.toString() || "",
+  //       quantity: item.quantity?.toString() || "0",
+  //       price: item.price?.toString() || "0",
+  //       name: item.name?.toString() || "",
+  //       totalPrice: item.totalPrice?.toString() || "0",
+  //       image: item.image ? item.image.toString() : "",
+  //     })),
+  //     paymentMethod: savedOrder.paymentMethod?.toString() || "",
+  //     orderStatus: savedOrder.orderStatus?.toString() || "",
+  //     deliveryLocation: {
+  //       type: savedOrder.deliveryLocation?.type?.toString() || "",
+  //       coordinates:
+  //         savedOrder.deliveryLocation?.coordinates?.map(
+  //           (coord) => coord?.toString() || "0"
+  //         ) || [],
+  //     },
+  //     deliveryAddress: {
+  //       type: savedOrder.deliveryAddress?.type?.toString() || "Home",
+  //       displayName: savedOrder.deliveryAddress?.displayName?.toString() || "",
+  //       receiverName:
+  //         savedOrder.deliveryAddress?.receiverName?.toString() || "",
+  //       receiverPhone:
+  //         savedOrder.deliveryAddress?.receiverPhone?.toString() || "",
+  //       street: savedOrder.deliveryAddress?.street?.toString() || "",
+  //       area: savedOrder.deliveryAddress?.area?.toString() || "",
+  //       landmark: savedOrder.deliveryAddress?.landmark?.toString() || "",
+  //       directionsToReach:
+  //         savedOrder.deliveryAddress?.directionsToReach?.toString() || "",
+  //       city: savedOrder.deliveryAddress?.city?.toString() || "",
+  //       state: savedOrder.deliveryAddress?.state?.toString() || "",
+  //       pincode: savedOrder.deliveryAddress?.pincode?.toString() || "",
+  //       country: savedOrder.deliveryAddress?.country?.toString() || "India",
+  //       latitude: savedOrder.deliveryAddress?.latitude?.toString() || "",
+  //       longitude: savedOrder.deliveryAddress?.longitude?.toString() || "",
+  //     },
+  //     subtotal: savedOrder.subtotal?.toString() || "0",
+  //     tax: savedOrder.tax?.toString() || "0",
+  //     discountAmount: savedOrder.discountAmount?.toString() || "0",
+  //     deliveryCharge: savedOrder.deliveryCharge?.toString() || "0",
+  //     surgeCharge: savedOrder.surgeCharge?.toString() || "0",
+  //     tipAmount: savedOrder.tipAmount?.toString() || "0",
+  //     totalAmount: savedOrder.totalAmount?.toString() || "0",
+  //     distanceKm: savedOrder.distanceKm?.toString() || "0",
+  //     couponCode: savedOrder.couponCode?.toString() || "",
+  //     instructions: savedOrder.instructions?.toString() || "",
+  //     createdAt: savedOrder.createdAt?.toISOString() || "",
+  //     updatedAt: savedOrder.updatedAt?.toISOString() || "",
+  //   };
 
-    // Send response
-    return res.status(201).json({
-      message: "Order placed successfully",
-      messageType: "success",
-      order: formattedOrder,
-    });
-  } catch (err) {
-    console.error("Error placing order:", err);
-    res.status(500).json({
-      message: "Error placing order",
-      messageType: "failure",
-      error: err.message,
-    });
-  }
+  //   // Send response
+  //   return res.status(201).json({
+  //     message: "Order placed successfully",
+  //     messageType: "success",
+  //     order: formattedOrder,
+  //   });
+  // } catch (err) {
+  //   console.error("Error placing order:", err);
+  //   res.status(500).json({
+  //     message: "Error placing order",
+  //     messageType: "failure",
+  //     error: err.message,
+  //   });
+  // }
 };
 
 // Get Order by ID
@@ -973,6 +975,297 @@ exports.getPastOrders = async (req, res) => {
       success: "0",
       message: "Internal server error",
       messageType: "failure",
+    });
+  }
+};
+
+
+
+
+
+
+
+exports.placeOrderV2 = async (req, res) => {
+  try {
+    const {
+      longitude,
+      latitude,
+      cartId,
+      paymentMethod,
+      couponCode,
+      instructions,
+      tipAmount = 0,
+      street,
+      area,
+      landmark,
+      city,
+      state,
+      pincode,
+      country = "India",
+    } = req.body;
+    const userId = req.user._id;
+    console.log(userId)
+    // Basic validation
+    if (
+      !cartId ||
+      !userId ||
+      !paymentMethod ||
+      !longitude ||
+      !latitude ||
+      !street ||
+      !city ||
+      !pincode
+    ) {
+      return res.status(400).json({
+        message: "Required fields are missing",
+        messageType: "failure",
+      });
+    }
+
+    // Find cart and restaurant
+    const cart = await Cart.findOne({ _id: cartId, user: userId });
+    if (!cart) {
+      return res.status(404).json({
+        message: "Cart not found",
+        messageType: "failure",
+      });
+    }
+
+    const restaurant = await Restaurant.findById(cart.restaurantId);
+    if (!restaurant) {
+      return res.status(404).json({
+        message: "Restaurant not found",
+        messageType: "failure",
+      });
+    }
+
+    const userCoords = [parseFloat(longitude), parseFloat(latitude)];
+    const restaurantCoords = restaurant.location.coordinates;
+    const preSurgeOrderAmount = cart.products.reduce(
+      (total, item) => total + item.price * item.quantity,
+      0
+    );
+
+    const offers = await Offer.find({
+      applicableRestaurants: restaurant._id,
+      isActive: true,
+      validFrom: { $lte: new Date() },
+      validTill: { $gte: new Date() },
+    }).lean();
+
+    const surgeObj = await getApplicableSurgeFee(
+      userCoords,
+      preSurgeOrderAmount
+    );
+
+    const isSurge = !!surgeObj;
+    const surgeFeeAmount = surgeObj ? surgeObj.fee : 0;
+
+    const deliveryFee = await feeService.calculateDeliveryFee(
+      restaurantCoords,
+      userCoords
+    );
+    const foodTax = await feeService.getActiveTaxes("food");
+
+    const costSummary = calculateOrderCostV2({
+      cartProducts: cart.products,
+      tipAmount,
+      couponCode,
+      deliveryFee,
+      offers,
+      revenueShare: { type: "percentage", value: 20 },
+      taxes: foodTax,
+      isSurge,
+      surgeFeeAmount,
+    });
+
+    // Calculate bill summary
+    const billSummary = calculateOrderCost({
+      cartProducts: cart.products,
+      restaurant,
+      userCoords,
+      couponCode,
+    });
+
+    // Map order items with product images
+    const orderItems = await Promise.all(
+      cart.products.map(async (item) => {
+        const product = await Product.findById(item.productId).select("images");
+        return {
+          productId: item.productId,
+          quantity: item.quantity,
+          price: item.price,
+          name: item.name,
+          totalPrice: item.price * item.quantity,
+          image: product?.images?.[0] || null,
+        };
+      })
+    );
+
+    // Determine initial order status based on restaurant permissions
+    let orderStatus = "pending";
+    const permission = await Permission.findOne({
+      restaurantId: restaurant._id,
+    });
+    if (permission && !permission.permissions.canAcceptOrder) {
+      orderStatus = "accepted_by_restaurant";
+    }
+
+    // Create and save order
+    const newOrder = new Order({
+      customerId: userId,
+      restaurantId: cart.restaurantId,
+      orderItems,
+      paymentMethod,
+      orderStatus: orderStatus,
+      deliveryLocation: { type: "Point", coordinates: userCoords },
+      deliveryAddress: {
+        street,
+        area,
+        landmark,
+        city,
+        state,
+        pincode,
+        country,
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+      },
+      subtotal: costSummary.cartTotal, // ✅ from V2
+      cartTotal: costSummary.cartTotal,
+      tax: costSummary.totalTaxAmount, // ✅ from V2
+      discountAmount: costSummary.offerDiscount + costSummary.couponDiscount, // ✅ clean combined discount
+      deliveryCharge: costSummary.deliveryFee, // ✅ from V2
+      offerId: costSummary.appliedOffer?._id || null,
+      offerName: costSummary.appliedOffer?.title || null,
+      offerDiscount: costSummary.offerDiscount,
+      surgeCharge: costSummary.surgeFee,
+      tipAmount,
+      totalAmount: costSummary.finalAmount, // ✅ final payable
+      couponCode,
+      isSurge: costSummary.isSurge,
+      surgeReason: costSummary.surgeReason,
+      agentAssignmentStatus: "not_assigned",
+      instructions: instructions,
+    });
+
+    const savedOrder = await newOrder.save();
+    const io = req.app.get("io");
+    const populatedOrder = await Order.findById(savedOrder._id)
+      .populate("customerId", "name email phone")
+      .lean();
+
+    const sanitizeOrderNumbers = (order, fields) => {
+      fields.forEach((key) => {
+        order[key] = Number(order[key]) || 0;
+      });
+      return order;
+    };
+
+    sanitizeOrderNumbers(populatedOrder, [
+      "subtotal",
+      "tax",
+      "discountAmount",
+      "deliveryCharge",
+      "offerDiscount",
+      "surgeCharge",
+      "tipAmount",
+      "totalAmount",
+    ]);
+
+    console.log(populatedOrder);
+
+    io.to(`restaurant_${savedOrder.restaurantId.toString()}`).emit(
+      "new_order",
+      populatedOrder
+    );
+    // Try to assign an agent
+    let assignmentResult;
+    try {
+      assignmentResult = await assignTask(savedOrder._id);
+      console.log("Agent assignment result:", assignmentResult);
+
+      console.log(`Emitting to restaurant_${savedOrder.restaurantId}`);
+      //   const updatedOrder = await Order.findByIdAndUpdate(orderId, {
+      //     $set: { assignedAgent: agentId, agentAssignmentStatus: "accepted", agentAcceptedAt: new Date() }
+      //   })
+      //   .populate("customerId", "name email")
+      //   .populate("assignedAgent", "fullName phoneNumber email")
+
+      // const orderObj = updatedOrder.toObject();
+
+      if (assignmentResult.success) {
+        // Update only agent assignment fields, not main order status
+
+        //  io.to(`restaurant_${orderObj.restaurantId}`).emit("new_order", {
+        //   success: true,
+        //   message: "Agent assigned to order",
+        //   updateType: "agent_assigned",
+        //   order: mapOrder(orderObj)
+        // });
+
+        // Notify all parties about assignment (not pickup)
+        io.to(`agent_${assignmentResult.agentId}`).emit("delivery_assigned", {
+          orderId: savedOrder._id,
+          action: "assignment",
+          status: "assigned",
+        });
+
+        io.to(`user_${savedOrder.customerId}`).emit("order_update", {
+          orderId: savedOrder._id,
+          updateType: "agent_assigned",
+          agentId: assignmentResult.agentId,
+          currentStatus: savedOrder.orderStatus, // Original status remains
+        });
+
+        io.to(`restaurant_${savedOrder.restaurantId}`).emit("order_update", {
+          orderId: savedOrder._id,
+          updateType: "agent_assigned",
+          agentId: assignmentResult.agentId,
+        });
+
+        // Send appropriate notifications
+        await sendPushNotification(
+          savedOrder.customerId,
+          "Delivery Agent Assigned",
+          "An agent has been assigned to your order"
+        );
+
+        await sendPushNotification(
+          assignmentResult.agentId,
+          "New Delivery Assignment",
+          "You have been assigned a new delivery"
+        );
+      } else {
+        // No agent available - update only assignment status
+      }
+    } catch (error) {
+      console.error("Error during agent assignment:", error);
+      await Order.findByIdAndUpdate(savedOrder._id, {
+        $set: {
+          agentAssignmentStatus: "awaiting_agent_assignment",
+        },
+      });
+    }
+
+    // Fetch the latest order state
+    const currentOrder = await Order.findById(savedOrder._id);
+
+    return res.status(201).json({
+      message: "Order placed successfully",
+      orderId: currentOrder._id,
+      totalAmount: currentOrder.totalAmount,
+      billSummary,
+      orderStatus: currentOrder.orderStatus, // Original status (not changed to assigned_to_agent)
+      agentAssignmentStatus: currentOrder.agentAssignmentStatus,
+      assignedAgent: currentOrder.assignedAgent,
+      messageType: "success",
+    });
+  } catch (err) {
+    console.error("Error placing order:", err);
+    res.status(500).json({
+      message: "Failed to place order",
+      messageType: "failure",
+      error: err.message,
     });
   }
 };

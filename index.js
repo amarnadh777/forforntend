@@ -2,10 +2,13 @@ const express = require("express");
 const dotenv = require("dotenv");
 const mongoose = require("mongoose");
 const cors = require('cors');
+const socketIo = require("socket.io");
+const http = require("http"); // Added missing http import
 
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app);
 
 app.use(cors({
   origin: '*',
@@ -15,7 +18,36 @@ app.use(cors({
 
 app.use(express.json());
 
-// ✅ routes using
+const io = socketIo(server, {
+  cors: {
+    origin: (origin, callback) => {
+      console.log("Socket.IO CORS request from:", origin);
+      callback(null, origin); // Echo back the request origin
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true
+  }
+});
+
+// Attach io to app so it can be used in controllers
+app.set("io", io);
+
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
+// Socket.io Connection Handler
+io.on("connection", (socket) => {
+  console.log("New client connected: " + socket.id);
+
+  // Add your socket event handlers here
+  socket.on("disconnect", () => {
+    console.log("Client disconnected: " + socket.id);
+  });
+});
+
+// Routes
 const userRouter = require("./routes/userRoutes");
 const productRouter = require("./routes/productRoutesRoutes");
 const resturantRouter = require("./routes/restaurantRoutes");
@@ -25,7 +57,8 @@ const offerRouter = require("./routes/offerRoutes");
 const orderRouter = require("./routes/orderRoutes");
 const couponRoutes = require("./routes/couponRoutes");
 const feedbackRoutes = require("./routes/feedbackRoutes");
-const cartRoutes = require("./routes/cartRoutes")
+const cartRoutes = require("./routes/cartRoutes");
+
 app.use("/user", userRouter);
 app.use("/restaurants", productRouter);
 app.use("/restaurants", resturantRouter);
@@ -35,10 +68,9 @@ app.use("/coupon", couponRoutes);
 app.use("/location", locationRouter);
 app.use("/agent", agentRouter);
 app.use("/feedback", feedbackRoutes);
-app.use("/cart",cartRoutes)
+app.use("/cart", cartRoutes);
 
-
-// ✅ dummy test route
+// Dummy test route
 const dummyCategories = [
   {
     categoryName: "Fruits",
@@ -96,7 +128,7 @@ app.get("/test/categories", (req, res) => {
   res.status(200).json(dummyCategories);
 });
 
-// ✅ Connect to DB and start server
+// Connect to DB and start server
 const PORT = process.env.PORT || 5000;
 mongoose
   .connect(process.env.MONGO_URI, {
@@ -104,7 +136,7 @@ mongoose
   })
   .then(() => {
     console.log("✅ MongoDB connected");
-    app.listen(PORT,() => {
+    server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on port ${PORT}`);
     });
   })

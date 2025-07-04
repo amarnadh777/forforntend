@@ -21,22 +21,13 @@ const openingHourSchema = new mongoose.Schema({
 const restaurantSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    ownerName:String,
 
-     ownerId: {  // Add this field
+    ownerId: { 
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true
+      required: true 
     },
-    ownerName: String,
-
-
-
-    images: [String], // URLs of images (e.g. Cloudinary URLs)
-
-
-
-
+    images: [String],
     address: {
       street: String,
       city: String,
@@ -48,9 +39,10 @@ const restaurantSchema = new mongoose.Schema(
       type: { type: String, enum: ["Point"], default: "Point" },
       coordinates: { type: [Number], default: [0, 0] }, // [lng, lat]
     },
+    ownerName:String,
     phone: { type: String, required: true },
     email: { type: String, required: true },
-    // offers-added
+  
     offers: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -73,16 +65,6 @@ const restaurantSchema = new mongoose.Schema(
     ,
      openingHours: [openingHourSchema],
 
-    businessHours: {
-      type: Map,
-      of: {
-        startTime: { type: String }, // "HH:mm"
-        endTime: { type: String },
-        closed: { type: Boolean, default: false } // optional field to mark a day closed
-      },
-      default: {}
-    },
-
     categories: [
       { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
     ],
@@ -97,7 +79,6 @@ const restaurantSchema = new mongoose.Schema(
       required: true,
     },
     banners: [String],
-    merchantSearchName: { type: String },
     kyc: {
     fssaiNumber: { type: String },
     gstNumber: { type: String},
@@ -154,10 +135,26 @@ const restaurantSchema = new mongoose.Schema(
       },
     ],
     minOrderAmount: { type: Number },
+    commission: {
+  type: {
+    type: String,
+    enum: ["percentage", "fixed"],
+    default: "percentage"
+  },
+  value: {
+    type: Number,
+    default: 20 // 20% commission
+  }
+}, preparationTime: {
+    type: Number, // in minutes
+    default: 20,
+  },
     paymentMethods: [
-      { type: String, enum: ["cash", "online", "wallet"] },
+      { type: String, enum: ['cod',"cash", "online", "wallet"] },
     ],
   },
+  
+  
   { timestamps: true }
 );
 

@@ -20,10 +20,11 @@ const {
   rescheduleOrder,
   merchantAcceptOrder,
   merchantRejectOrder,
-  placeOrder,
+
   getOrderPriceSummary,
   getOrderPriceSummaryByaddressId
- ,getPastOrders
+ ,getPastOrders,
+ placeOrderV2
   
 } = require('../controllers/orderController');
 
@@ -33,7 +34,7 @@ router.post('/create', createOrder); // Create new order
 
 
 //place order 
-router.post("/place-order", protect, placeOrder)
+// router.post("/place-order", protect, placeOrder)
 
 router.get('/', getAllOrders); // Admin - get all orders
 router.get('/:orderId', getOrderById); // Get specific order
@@ -44,5 +45,6 @@ router.post("/pricesummary", protect, getOrderPriceSummary)
 router.post("/pricesummary/:addessId", protect,getOrderPriceSummaryByaddressId)
 
 router.get("/customer/orders", protect,getPastOrders)
+router.post("/place-order",protect,placeOrderV2)
 
 module.exports = router;

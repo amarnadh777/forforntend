@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-
+const mongoosePaginate = require("mongoose-paginate-v2");
 const orderSchema = mongoose.Schema({
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant' },
@@ -13,6 +13,26 @@ const orderSchema = mongoose.Schema({
     image: String, 
 
   }],
+
+
+
+
+onlinePaymentDetails: {
+  razorpayOrderId: { type: String },
+  razorpayPaymentId: { type: String },
+  razorpaySignature: { type: String },
+  verificationStatus: { type: String, enum: ['pending', 'verified', 'failed'], default: 'pending' },
+  failureReason: { type: String }
+},
+
+
+
+
+
+
+
+
+
 
   orderTime: { type: Date, default: Date.now },
   deliveryTime: Date,
@@ -28,6 +48,19 @@ const orderSchema = mongoose.Schema({
   },
 
   assignedAgent: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent' },  
+  agentAssignmentStatus: {
+  type: String,
+enum: [
+    'not_assigned',
+    'assigned_waiting_acceptance',
+    'accepted',
+    'assigned',
+    'rejected',
+    'reassigned'  ,
+    'awaiting_agent_assignment'                
+],
+default: 'not_assigned'
+},
 
   rejectionHistory: [{
     agentId: { type: mongoose.Schema.Types.ObjectId, ref: "Agent" },
@@ -46,12 +79,38 @@ const orderSchema = mongoose.Schema({
   totalAmount: Number,
   distanceKm: Number,
 
+offerId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Offer',
+  default: null
+},
+offerName: {
+  type: String,
+  default: null
+},
+offerDiscount: {
+  type: Number,
+  default: 0
+},
+
+cartTotal: Number,
+
+
+
+
+
+
   paymentMethod: { type: String, enum: ['cash', 'online', 'wallet'] },
+  walletUsed: { type: Number, default: 0 },
   paymentStatus: { type: String, enum: ['pending', 'completed', 'failed'] },
 
   deliveryMode: { type: String, enum: ['contact', 'no_contact', 'do_not_disturb'] },
 
-  instructions: String,
+
+  instructions: {
+  type: String,
+  default: "",
+  },
   orderPreparationDelay: Boolean,
   scheduledTime: Date,
   couponCode: String,
@@ -90,29 +149,22 @@ const orderSchema = mongoose.Schema({
     }
   },
 
-deliveryAddress: {
-  type: { type: String, default: "Home" },
-  displayName: { type: String },
-  receiverName: { type: String },
-  receiverPhone: { type: String },
-  street: { type: String, required: true },
-  area: { type: String },
-  landmark: { type: String },
-  directionsToReach: { type: String },
-  city: { type: String, required: true },
-  state: { type: String },
-  pincode: { type: String, required: true },
-  country: { type: String, default: 'India' },
-  latitude: { type: Number },
-  longitude: { type: Number },
-},
+  deliveryAddress: {
+    street: { type: String, required: true },
+    area: { type: String },
+    landmark: { type: String },
+    city: { type: String, required: true },
+    state: { type: String },
+    pincode: { type: String, required: true },
+    country: { type: String, default: 'India' },
+  },
 
   guestName: { type: String },
   guestPhone: { type: String },
   guestEmail: { type: String },
 
 }, { timestamps: true });
-
+orderSchema.plugin(mongoosePaginate);
 orderSchema.index({ deliveryLocation: '2dsphere' });
 
 module.exports = mongoose.model('Order', orderSchema);
