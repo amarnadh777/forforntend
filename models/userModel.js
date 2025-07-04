@@ -63,6 +63,15 @@ const addressSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+        landmark: {
+      type: String,
+      trim: true,
+    },
+    country: {
+      type: String,
+      trim: true,
+      default: "India"
+    }
   },
   { _id: true, timestamps: true }
 );

@@ -24,7 +24,8 @@ const {
   getOrderPriceSummary,
   getOrderPriceSummaryByaddressId
  ,getPastOrders,
- placeOrderV2
+ placeOrderV2,
+ placeOrderByAddressId
   
 } = require('../controllers/orderController');
 
@@ -46,5 +47,7 @@ router.post("/pricesummary/:addessId", protect,getOrderPriceSummaryByaddressId)
 
 router.get("/customer/orders", protect,getPastOrders)
 router.post("/place-order",protect,placeOrderV2)
+router.post("/place-order-byaddressId",protect,placeOrderByAddressId)
+
 
 module.exports = router;

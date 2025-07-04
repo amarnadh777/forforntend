@@ -374,6 +374,140 @@ exports.getOrderById = async (req, res) => {
   }
 };
 
+
+exports.getOrderDetails = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const userId = req.user._id; // Assuming you have user auth middleware
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({
+        message: "Invalid order ID format",
+        messageType: "failure"
+      });
+    }
+
+    const order = await Order.findById(orderId)
+      .populate('customerId', 'name email phone')
+      .populate('restaurantId', 'name logo address')
+      .populate('orderItems.productId', 'name images')
+      .populate('assignedAgent', 'fullName phoneNumber vehicleType')
+      .populate('offerId', 'title description')
+      .lean();
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found",
+        messageType: "failure"
+      });
+    }
+
+    // Verify the requesting user has access to this order
+    if (order.customerId._id.toString() !== userId.toString() && 
+        !req.user.roles.includes('admin') && 
+        !req.user.roles.includes('restaurant')) {
+      return res.status(403).json({
+        message: "Unauthorized to view this order",
+        messageType: "failure"
+      });
+    }
+
+    // Format the response
+    const response = {
+      orderId: order._id,
+      customer: order.customerId,
+      restaurant: {
+        id: order.restaurantId._id,
+        name: order.restaurantId.name,
+        logo: order.restaurantId.logo,
+        address: order.restaurantId.address
+      },
+      items: order.orderItems.map(item => ({
+        productId: item.productId?._id,
+        name: item.name || item.productId?.name,
+        quantity: item.quantity,
+        price: item.price,
+        totalPrice: item.totalPrice,
+        image: item.image || item.productId?.images?.[0]
+      })),
+      status: {
+        current: order.orderStatus,
+        agentAssignment: order.agentAssignmentStatus,
+        payment: order.paymentStatus
+      },
+      timeline: {
+        orderTime: order.orderTime,
+        deliveryTime: order.deliveryTime,
+        preparationTime: order.preparationTime,
+        estimatedDeliveryTime: order.deliveryTime // You might want to calculate this
+      },
+      payment: {
+        method: order.paymentMethod,
+        amount: order.totalAmount,
+        onlineDetails: order.paymentMethod === 'online' ? {
+          razorpayOrderId: order.onlinePaymentDetails?.razorpayOrderId,
+          status: order.onlinePaymentDetails?.verificationStatus
+        } : null,
+        walletUsed: order.walletUsed
+      },
+      delivery: {
+        address: order.deliveryAddress,
+        location: order.deliveryLocation,
+        mode: order.deliveryMode,
+        agent: order.assignedAgent ? {
+          id: order.assignedAgent._id,
+          name: order.assignedAgent.fullName,
+          phone: order.assignedAgent.phoneNumber,
+          vehicle: order.assignedAgent.vehicleType
+        } : null
+      },
+      offers: order.offerId ? {
+        id: order.offerId._id,
+        name: order.offerName || order.offerId.title,
+        discount: order.offerDiscount
+      } : null,
+      charges: {
+        subtotal: order.subtotal,
+        tax: order.tax,
+        delivery: order.deliveryCharge,
+        surge: order.surgeCharge,
+        tip: order.tipAmount,
+        discount: order.discountAmount,
+        total: order.totalAmount
+      },
+      metadata: {
+        distance: order.distanceKm,
+        instructions: order.instructions,
+        couponCode: order.couponCode
+      }
+    };
+
+    res.status(200).json({
+      message: "Order details retrieved successfully",
+      messageType: "success",
+      order: response
+    });
+
+  } catch (err) {
+    console.error("Error fetching order details:", err);
+    res.status(500).json({
+      message: "Failed to retrieve order details",
+      messageType: "failure",
+      error: err.message
+    });
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
 // Get Orders by Customer
 // Get Orders by Customer with pagination and better response structure
 exports.getOrdersByCustomer = async (req, res) => {
@@ -1004,7 +1138,7 @@ exports.placeOrderV2 = async (req, res) => {
       country = "India",
     } = req.body;
     const userId = req.user._id;
-    console.log(userId)
+
     // Basic validation
     if (
       !cartId ||
@@ -1256,6 +1390,284 @@ exports.placeOrderV2 = async (req, res) => {
       totalAmount: currentOrder.totalAmount,
       billSummary,
       orderStatus: currentOrder.orderStatus, // Original status (not changed to assigned_to_agent)
+      agentAssignmentStatus: currentOrder.agentAssignmentStatus,
+      assignedAgent: currentOrder.assignedAgent,
+      messageType: "success",
+    });
+  } catch (err) {
+    console.error("Error placing order:", err);
+    res.status(500).json({
+      message: "Failed to place order",
+      messageType: "failure",
+      error: err.message,
+    });
+  }
+};
+
+
+
+
+exports.placeOrderByAddressId = async (req, res) => {
+  try {
+    const {
+      cartId,
+    addressId,
+      paymentMethod,
+      couponCode,
+      instructions,
+      tipAmount = 0,
+   
+    } = req.body;
+    
+      const userId = req.user._id;
+    // Basic validation
+    if (!cartId || !userId || !paymentMethod || !addressId) {
+      return res.status(400).json({
+        message: "Required fields are missing",
+        messageType: "failure",
+      });
+    }
+
+    // Find the user and their address
+    const user = await User.findById(userId).select('addresses');
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+        messageType: "failure",
+      });
+    }
+
+    const deliveryAddress = user.addresses.id(addressId);
+    if (!deliveryAddress) {
+      return res.status(404).json({
+        message: "Address not found for this user",
+        messageType: "failure",
+      });
+    }
+
+    // Extract coordinates and address details
+    const [longitude, latitude] = deliveryAddress.location.coordinates;
+    const { street, area, landmark, city, state, zip: pincode } = deliveryAddress;
+
+    // Find cart and validate
+    const cart = await Cart.findOne({ _id: cartId, user: userId });
+    if (!cart) {
+      return res.status(404).json({
+        message: "Cart not found",
+        messageType: "failure",
+      });
+    }
+
+    // Find restaurant
+    const restaurant = await Restaurant.findById(cart.restaurantId);
+    if (!restaurant) {
+      return res.status(404).json({
+        message: "Restaurant not found",
+        messageType: "failure",
+      });
+    }
+
+    const userCoords = [parseFloat(longitude), parseFloat(latitude)];
+    const restaurantCoords = restaurant.location.coordinates;
+    const preSurgeOrderAmount = cart.products.reduce(
+      (total, item) => total + item.price * item.quantity,
+      0
+    );
+
+    // Find applicable offers
+    const offers = await Offer.find({
+      applicableRestaurants: restaurant._id,
+      isActive: true,
+      validFrom: { $lte: new Date() },
+      validTill: { $gte: new Date() },
+    }).lean();
+
+    // Calculate fees and taxes
+    const surgeObj = await getApplicableSurgeFee(
+      userCoords,
+      preSurgeOrderAmount
+    );
+    const isSurge = !!surgeObj;
+    const surgeFeeAmount = surgeObj ? surgeObj.fee : 0;
+
+    const deliveryFee = await feeService.calculateDeliveryFee(
+      restaurantCoords,
+      userCoords
+    );
+    const foodTax = await feeService.getActiveTaxes("food");
+
+    // Calculate order costs
+    const costSummary = calculateOrderCostV2({
+      cartProducts: cart.products,
+      tipAmount,
+      couponCode,
+      deliveryFee,
+      offers,
+      revenueShare: { type: "percentage", value: 20 },
+      taxes: foodTax,
+      isSurge,
+      surgeFeeAmount,
+    });
+
+    // Calculate bill summary
+    const billSummary = calculateOrderCost({
+      cartProducts: cart.products,
+      restaurant,
+      userCoords,
+      couponCode,
+    });
+
+    // Map order items with product images
+    const orderItems = await Promise.all(
+      cart.products.map(async (item) => {
+        const product = await Product.findById(item.productId).select("images");
+        return {
+          productId: item.productId,
+          quantity: item.quantity,
+          price: item.price,
+          name: item.name,
+          totalPrice: item.price * item.quantity,
+          image: product?.images?.[0] || null,
+        };
+      })
+    );
+
+    // Determine initial order status based on restaurant permissions
+    let orderStatus = "pending";
+    const permission = await Permission.findOne({
+      restaurantId: restaurant._id,
+    });
+    if (permission && !permission.permissions.canAcceptOrder) {
+      orderStatus = "accepted_by_restaurant";
+    }
+
+    // Create and save order
+    const newOrder = new Order({
+      customerId: userId,
+      restaurantId: cart.restaurantId,
+      orderItems,
+      paymentMethod,
+      orderStatus: orderStatus,
+      deliveryLocation: { type: "Point", coordinates: userCoords },
+      deliveryAddress: {
+        street,
+        area,
+        landmark,
+        city,
+        state,
+        pincode,
+        country: deliveryAddress.country || "India",
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+      },
+      subtotal: costSummary.cartTotal,
+      cartTotal: costSummary.cartTotal,
+      tax: costSummary.totalTaxAmount,
+      discountAmount: costSummary.offerDiscount + costSummary.couponDiscount,
+      deliveryCharge: costSummary.deliveryFee,
+      offerId: costSummary.appliedOffer?._id || null,
+      offerName: costSummary.appliedOffer?.title || null,
+      offerDiscount: costSummary.offerDiscount,
+      surgeCharge: costSummary.surgeFee,
+      tipAmount,
+      totalAmount: costSummary.finalAmount,
+      couponCode,
+      isSurge: costSummary.isSurge,
+      surgeReason: costSummary.surgeReason,
+      agentAssignmentStatus: "not_assigned",
+      instructions: instructions,
+      addressId: addressId, // Store the address ID for reference
+    });
+
+    const savedOrder = await newOrder.save();
+    const io = req.app.get("io");
+    const populatedOrder = await Order.findById(savedOrder._id)
+      .populate("customerId", "name email phone")
+      .lean();
+
+    // Sanitize order numbers
+    const sanitizeOrderNumbers = (order, fields) => {
+      fields.forEach((key) => {
+        order[key] = Number(order[key]) || 0;
+      });
+      return order;
+    };
+
+    sanitizeOrderNumbers(populatedOrder, [
+      "subtotal",
+      "tax",
+      "discountAmount",
+      "deliveryCharge",
+      "offerDiscount",
+      "surgeCharge",
+      "tipAmount",
+      "totalAmount",
+    ]);
+
+    // Notify restaurant
+    io.to(`restaurant_${savedOrder.restaurantId.toString()}`).emit(
+      "new_order",
+      populatedOrder
+    );
+
+    // Try to assign an agent
+    let assignmentResult;
+    try {
+      assignmentResult = await assignTask(savedOrder._id);
+      console.log("Agent assignment result:", assignmentResult);
+
+      if (assignmentResult.success) {
+        // Notify all parties about assignment
+        io.to(`agent_${assignmentResult.agentId}`).emit("delivery_assigned", {
+          orderId: savedOrder._id,
+          action: "assignment",
+          status: "assigned",
+        });
+
+        io.to(`user_${savedOrder.customerId}`).emit("order_update", {
+          orderId: savedOrder._id,
+          updateType: "agent_assigned",
+          agentId: assignmentResult.agentId,
+          currentStatus: savedOrder.orderStatus,
+        });
+
+        io.to(`restaurant_${savedOrder.restaurantId}`).emit("order_update", {
+          orderId: savedOrder._id,
+          updateType: "agent_assigned",
+          agentId: assignmentResult.agentId,
+        });
+
+        // Send push notifications
+        await sendPushNotification(
+          savedOrder.customerId,
+          "Delivery Agent Assigned",
+          "An agent has been assigned to your order"
+        );
+
+        await sendPushNotification(
+          assignmentResult.agentId,
+          "New Delivery Assignment",
+          "You have been assigned a new delivery"
+        );
+      }
+    } catch (error) {
+      console.error("Error during agent assignment:", error);
+      await Order.findByIdAndUpdate(savedOrder._id, {
+        $set: {
+          agentAssignmentStatus: "awaiting_agent_assignment",
+        },
+      });
+    }
+
+    // Fetch the latest order state
+    const currentOrder = await Order.findById(savedOrder._id);
+
+    return res.status(201).json({
+      message: "Order placed successfully",
+      orderId: currentOrder._id,
+      totalAmount: currentOrder.totalAmount,
+      billSummary,
+      orderStatus: currentOrder.orderStatus,
       agentAssignmentStatus: currentOrder.agentAssignmentStatus,
       assignedAgent: currentOrder.assignedAgent,
       messageType: "success",
