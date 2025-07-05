@@ -15,6 +15,8 @@ const feeService = require("../services/feeService")
 const Permission = require("../models/restaurantPermissionModel")
 const Offer = require("../models/offerModel")
 const {assignTask} = require("../services/allocationService")
+const crypto = require("crypto");
+const razorpay = require("../config/razorpayInstance");
 exports.createOrder = async (req, res) => {
   try {
     const { customerId, restaurantId, orderItems, paymentMethod, location } =
@@ -1396,275 +1398,249 @@ exports.placeOrderV2 = async (req, res) => {
 
 
 
-exports.placeOrderByAddressId = async (req, res) => {
+
+exports.placeOrderWithAddressId = async (req, res) => {
   try {
+    const userId = req.user._id;
     const {
       cartId,
-    addressId,
       paymentMethod,
+      addressId,
       couponCode,
       instructions,
       tipAmount = 0,
-   
     } = req.body;
-    
-      const userId = req.user._id;
-    // Basic validation
-    if (!cartId || !userId || !paymentMethod || !addressId) {
+
+    if (!cartId || !paymentMethod || !addressId) {
       return res.status(400).json({
-        message: "Required fields are missing",
+        message: "Missing required fields",
         messageType: "failure",
       });
     }
 
-    // Find the user and their address
-    const user = await User.findById(userId).select('addresses');
-    if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-        messageType: "failure",
-      });
-    }
+    // Fetch user and address
+    const user = await User.findById(userId).select("addresses");
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    const deliveryAddress = user.addresses.id(addressId);
-    if (!deliveryAddress) {
-      return res.status(404).json({
-        message: "Address not found for this user",
-        messageType: "failure",
-      });
-    }
+    const selectedAddress = user.addresses.id(addressId);
+    if (!selectedAddress)
+      return res.status(404).json({ message: "Address not found" });
 
-    // Extract coordinates and address details
-    const [longitude, latitude] = deliveryAddress.location.coordinates;
-    const { street, area, landmark, city, state, zip: pincode } = deliveryAddress;
+    const [userLongitude, userLatitude] = selectedAddress.location.coordinates;
 
-    // Find cart and validate
-    const cart = await Cart.findOne({ _id: cartId, user: userId });
-    if (!cart) {
-      return res.status(404).json({
-        message: "Cart not found",
-        messageType: "failure",
-      });
-    }
+    // Fetch cart
+    const cart = await Cart.findById(cartId);
+    if (!cart) return res.status(404).json({ message: "Cart not found" });
 
-    // Find restaurant
+    // Fetch restaurant
     const restaurant = await Restaurant.findById(cart.restaurantId);
     if (!restaurant) {
       return res.status(404).json({
-        message: "Restaurant not found",
+        message: "Restaurant not found for this cart",
         messageType: "failure",
       });
     }
 
-    const userCoords = [parseFloat(longitude), parseFloat(latitude)];
-    const restaurantCoords = restaurant.location.coordinates;
-    const preSurgeOrderAmount = cart.products.reduce(
-      (total, item) => total + item.price * item.quantity,
-      0
-    );
+    const [restaurantLongitude, restaurantLatitude] = restaurant.location.coordinates;
 
-    // Find applicable offers
-    const offers = await Offer.find({
-      applicableRestaurants: restaurant._id,
-      isActive: true,
-      validFrom: { $lte: new Date() },
-      validTill: { $gte: new Date() },
-    }).lean();
+    // Calculate bill
+    const cartProducts = cart.products.map((item) => ({
+      price: item.price,
+      quantity: item.quantity,
+    }));
 
-    // Calculate fees and taxes
-    const surgeObj = await getApplicableSurgeFee(
-      userCoords,
-      preSurgeOrderAmount
-    );
-    const isSurge = !!surgeObj;
-    const surgeFeeAmount = surgeObj ? surgeObj.fee : 0;
-
-    const deliveryFee = await feeService.calculateDeliveryFee(
-      restaurantCoords,
-      userCoords
-    );
-    const foodTax = await feeService.getActiveTaxes("food");
-
-    // Calculate order costs
-    const costSummary = calculateOrderCostV2({
-      cartProducts: cart.products,
+    const bill = calculateOrderCostV2({
+      cartProducts,
       tipAmount,
       couponCode,
-      deliveryFee,
-      offers,
-      revenueShare: { type: "percentage", value: 20 },
-      taxes: foodTax,
-      isSurge,
-      surgeFeeAmount,
+      restaurantCoords: { latitude: restaurantLatitude, longitude: restaurantLongitude },
+      userCoords: { latitude: userLatitude, longitude: userLongitude },
+      offers: await Offer.find({ _id: { $in: restaurant.offers }, active: true }),
+      revenueShare: restaurant.commission,
+      taxRate: 5,
+      isSurge: restaurant.isSurge || false,
     });
 
-    // Calculate bill summary
-    const billSummary = calculateOrderCost({
-      cartProducts: cart.products,
-      restaurant,
-      userCoords,
-      couponCode,
-    });
-
-    // Map order items with product images
-    const orderItems = await Promise.all(
-      cart.products.map(async (item) => {
-        const product = await Product.findById(item.productId).select("images");
-        return {
-          productId: item.productId,
-          quantity: item.quantity,
-          price: item.price,
-          name: item.name,
-          totalPrice: item.price * item.quantity,
-          image: product?.images?.[0] || null,
-        };
-      })
-    );
-
-    // Determine initial order status based on restaurant permissions
+    // Check permission
     let orderStatus = "pending";
-    const permission = await Permission.findOne({
-      restaurantId: restaurant._id,
-    });
+    const permission = await Permission.findOne({ restaurantId: restaurant._id });
     if (permission && !permission.permissions.canAcceptOrder) {
       orderStatus = "accepted_by_restaurant";
     }
 
-    // Create and save order
+    // Create order
     const newOrder = new Order({
       customerId: userId,
-      restaurantId: cart.restaurantId,
-      orderItems,
-      paymentMethod,
-      orderStatus: orderStatus,
-      deliveryLocation: { type: "Point", coordinates: userCoords },
-      deliveryAddress: {
-        street,
-        area,
-        landmark,
-        city,
-        state,
-        pincode,
-        country: deliveryAddress.country || "India",
-        latitude: parseFloat(latitude),
-        longitude: parseFloat(longitude),
-      },
-      subtotal: costSummary.cartTotal,
-      cartTotal: costSummary.cartTotal,
-      tax: costSummary.totalTaxAmount,
-      discountAmount: costSummary.offerDiscount + costSummary.couponDiscount,
-      deliveryCharge: costSummary.deliveryFee,
-      offerId: costSummary.appliedOffer?._id || null,
-      offerName: costSummary.appliedOffer?.title || null,
-      offerDiscount: costSummary.offerDiscount,
-      surgeCharge: costSummary.surgeFee,
+      restaurantId: restaurant._id,
+      orderItems: cart.products,
+      orderStatus,
+      subtotal: bill.cartTotal,
+      discountAmount: bill.offerDiscount,
+      tax: bill.taxAmount,
+      deliveryCharge: bill.deliveryFee,
+      totalAmount: bill.finalAmount,
       tipAmount,
-      totalAmount: costSummary.finalAmount,
+      paymentMethod,
+      paymentStatus: "pending",
+      deliveryLocation: {
+        type: "Point",
+        coordinates: [userLongitude, userLatitude],
+      },
+      deliveryAddress: {
+        street: selectedAddress.street,
+        area: selectedAddress.area || "",
+        landmark: selectedAddress.landmark || "",
+        city: selectedAddress.city,
+        state: selectedAddress.state || "",
+        pincode: selectedAddress.pincode || "000000",
+        country: selectedAddress.country || "India",
+      },
+      instructions,
       couponCode,
-      isSurge: costSummary.isSurge,
-      surgeReason: costSummary.surgeReason,
-      agentAssignmentStatus: "not_assigned",
-      instructions: instructions,
-      addressId: addressId, // Store the address ID for reference
+      distanceKm: bill.distanceKm || 0,
     });
 
-    const savedOrder = await newOrder.save();
-    const io = req.app.get("io");
-    const populatedOrder = await Order.findById(savedOrder._id)
-      .populate("customerId", "name email phone")
-      .lean();
+    await newOrder.save();
 
-    // Sanitize order numbers
-    const sanitizeOrderNumbers = (order, fields) => {
-      fields.forEach((key) => {
-        order[key] = Number(order[key]) || 0;
-      });
-      return order;
-    };
-
-    sanitizeOrderNumbers(populatedOrder, [
-      "subtotal",
-      "tax",
-      "discountAmount",
-      "deliveryCharge",
-      "offerDiscount",
-      "surgeCharge",
-      "tipAmount",
-      "totalAmount",
-    ]);
-
-    // Notify restaurant
-    io.to(`restaurant_${savedOrder.restaurantId.toString()}`).emit(
-      "new_order",
-      populatedOrder
-    );
-
-    // Try to assign an agent
-    let assignmentResult;
-    try {
-      assignmentResult = await assignTask(savedOrder._id);
-      console.log("Agent assignment result:", assignmentResult);
-
-      if (assignmentResult.success) {
-        // Notify all parties about assignment
-        io.to(`agent_${assignmentResult.agentId}`).emit("delivery_assigned", {
-          orderId: savedOrder._id,
-          action: "assignment",
-          status: "assigned",
-        });
-
-        io.to(`user_${savedOrder.customerId}`).emit("order_update", {
-          orderId: savedOrder._id,
-          updateType: "agent_assigned",
-          agentId: assignmentResult.agentId,
-          currentStatus: savedOrder.orderStatus,
-        });
-
-        io.to(`restaurant_${savedOrder.restaurantId}`).emit("order_update", {
-          orderId: savedOrder._id,
-          updateType: "agent_assigned",
-          agentId: assignmentResult.agentId,
-        });
-
-        // Send push notifications
-        await sendPushNotification(
-          savedOrder.customerId,
-          "Delivery Agent Assigned",
-          "An agent has been assigned to your order"
-        );
-
-        await sendPushNotification(
-          assignmentResult.agentId,
-          "New Delivery Assignment",
-          "You have been assigned a new delivery"
-        );
-      }
-    } catch (error) {
-      console.error("Error during agent assignment:", error);
-      await Order.findByIdAndUpdate(savedOrder._id, {
-        $set: {
-          agentAssignmentStatus: "awaiting_agent_assignment",
+    // If online payment — create Razorpay order and return immediately
+    if (paymentMethod === "online") {
+      const razorpayOrder = await razorpay.orders.create({
+        amount: Math.round(bill.finalAmount * 100),
+        currency: "INR",
+        receipt: newOrder._id.toString(),
+        notes: {
+          restaurantName: restaurant.name,
+          userId: userId.toString(),
+          orderId: newOrder._id.toString(),
         },
+      });
+
+      newOrder.onlinePaymentDetails.razorpayOrderId = razorpayOrder.id;
+      await newOrder.save();
+
+      return res.status(200).json({
+        message: "Order created. Proceed to payment.",
+        messageType: "success",
+        orderId: newOrder._id,
+        razorpayOrderId: razorpayOrder.id,
+        amount: bill.finalAmount,
+        currency: "INR",
+        keyId: process.env.RAZORPAY_KEY_ID,
       });
     }
 
-    // Fetch the latest order state
-    const currentOrder = await Order.findById(savedOrder._id);
+    // If COD → assign agent immediately
+    try {
+      const assignmentResult = await assignTask(newOrder._id);
 
+      if (assignmentResult.status !== "assigned") {
+        console.warn("⚠️ Agent assignment pending:", assignmentResult.reason || assignmentResult.error);
+      } else {
+        console.log(`✅ Agent ${assignmentResult.agent.fullName} assigned`);
+      }
+
+    } catch (error) {
+      console.error("❌ Error during agent assignment:", error);
+    }
+
+    // Final response for COD order
     return res.status(201).json({
       message: "Order placed successfully",
-      orderId: currentOrder._id,
-      totalAmount: currentOrder.totalAmount,
-      billSummary,
-      orderStatus: currentOrder.orderStatus,
-      agentAssignmentStatus: currentOrder.agentAssignmentStatus,
-      assignedAgent: currentOrder.assignedAgent,
       messageType: "success",
+      orderId: newOrder._id,
+      bill: bill,
     });
+
+  } catch (error) {
+    console.error("❌ Order placement error:", error);
+    return res.status(500).json({
+      message: "Internal server error while placing order",
+      messageType: "failure",
+      error: error.message,
+    });
+  }
+};
+
+exports.verifyPayment = async (req, res) => {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      orderId,
+    } = req.body;
+
+    if (
+      !razorpay_order_id ||
+      !razorpay_payment_id ||
+      !razorpay_signature ||
+      !orderId
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Missing payment details", messageType: "failure" });
+    }
+
+    // 1️⃣ Generate expected signature
+    const generatedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(razorpay_order_id + "|" + razorpay_payment_id)
+      .digest("hex");
+
+    // 2️⃣ Compare
+    if (generatedSignature !== razorpay_signature) {
+      await Order.findByIdAndUpdate(orderId, {
+        $set: {
+          "onlinePaymentDetails.verificationStatus": "failed",
+          "onlinePaymentDetails.failureReason": "Invalid signature",
+        },
+      });
+
+      return res
+        .status(400)
+        .json({ message: "Invalid payment signature", messageType: "failure" });
+    }
+
+    // 3️⃣ Update order payment status
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ message: "Order not found", messageType: "failure" });
+    }
+
+    order.paymentStatus = "completed";
+    order.onlinePaymentDetails = {
+      razorpayOrderId: razorpay_order_id,
+      razorpayPaymentId: razorpay_payment_id,
+      razorpaySignature: razorpay_signature,
+      verificationStatus: "verified",
+    };
+    await order.save();
+
+    // 4️⃣ Trigger task allocation after payment verification
+    const allocationResult = await assignTask(orderId);
+    console.log("🚚 Allocation Result after payment:", allocationResult);
+
+   return res.status(200).json({
+  message: "✅ Payment verified and order confirmed.",
+  messageType: "success",
+  orderId: order._id,
+  paymentStatus: order.paymentStatus,
+  allocation: {
+    status: allocationResult.status,
+    agentId: allocationResult.agent ? allocationResult.agent._id : null,
+    agentName: allocationResult.agent ? allocationResult.agent.fullName : null,
+    reason: allocationResult.reason || allocationResult.error || null,
+  },
+  nextSteps: paymentMethod === "online"
+    ? "Order is now being processed, agent will be assigned shortly."
+    : "Awaiting agent assignment.",
+})
   } catch (err) {
-    console.error("Error placing order:", err);
+    console.error("Payment verification error:", err);
     res.status(500).json({
-      message: "Failed to place order",
+      message: "Failed to verify payment",
       messageType: "failure",
       error: err.message,
     });

@@ -32,6 +32,7 @@
     "mongoose": "^8.14.2",
     "mongoose-paginate-v2": "^1.9.1",
     "nodemailer": "^7.0.3",
+    "razorpay": "^2.9.6",
     "socket.io": "^4.8.1",
     "twilio": "^5.6.1"
   },
