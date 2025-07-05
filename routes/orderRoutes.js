@@ -27,7 +27,9 @@ const {
  placeOrderV2,
  placeOrderByAddressId,
  getOrderDetails,
- placeOrderWithAddressId
+ placeOrderWithAddressId,
+ getActiveOrder,
+ verifyPayment
   
 } = require('../controllers/orderController');
 
@@ -52,4 +54,7 @@ router.post("/place-order",protect,placeOrderV2)
 router.post("/place-order-byaddressId",protect,placeOrderWithAddressId)
 router.get("/:orderId",protect,getOrderDetails)
 
+router.post("/verify-payment", protect, verifyPayment);
+
+router.get("/active/status", protect,getActiveOrder);
 module.exports = router;

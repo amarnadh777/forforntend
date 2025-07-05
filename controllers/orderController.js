@@ -1646,3 +1646,80 @@ exports.verifyPayment = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+exports.getActiveOrder = async (req, res) => {
+  try {
+  
+        const userId = req.user._id;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    const activeOrderStatuses = [
+      "pending",
+      "pending_agent_acceptance",
+      "accepted_by_restaurant",
+      "preparing",
+      "ready",
+      "assigned_to_agent",
+      "picked_up",
+      "on_the_way",
+      "in_progress",
+      "arrived"
+    ];
+
+    const activeOrder = await Order.findOne({
+      customerId: userId,
+      orderStatus: { $in: activeOrderStatuses }
+    })
+      .sort({ createdAt: -1 })
+      .populate("restaurantId")
+      .populate("assignedAgent")
+      .exec();
+
+    if (!activeOrder) {
+      return res.status(404).json({ message: "No active order found" });
+    }
+
+    // Get customer details
+    const customer = await User.findById(activeOrder.customerId).select("name email phone");
+
+    // Build response object
+    const response = {
+      _id: activeOrder._id,
+      customer: {
+        _id: customer._id,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone
+      },
+      restaurant: {
+        id: activeOrder.restaurantId._id,
+        name: activeOrder.restaurantId.name,
+        address: activeOrder.restaurantId.address
+      },
+      orderItems: activeOrder.orderItems,
+      orderStatus: activeOrder.orderStatus,
+      assignedAgent: activeOrder.assignedAgent
+        ? {
+            _id: activeOrder.assignedAgent._id,
+            name: activeOrder.assignedAgent.name,
+            phone: activeOrder.assignedAgent.phone
+          }
+        : null,
+      isAgentAssigned: activeOrder.assignedAgent ? 1 : 0,
+      subtotal: activeOrder.subtotal,
+      orderTime: activeOrder.orderTime
+    };
+
+    return res.status(200).json(response);
+  } catch (err) {
+    console.error("Error fetching active order:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
