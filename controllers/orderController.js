@@ -977,132 +977,209 @@ exports.getOrderPriceSummaryByaddressId = async (req, res) => {
     });
   }
 };
-
-// Get user's past delivered and canceled orders
-
 exports.getPastOrders = async (req, res) => {
   try {
     const userId = req.user._id;
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
-        success: "0",
-        message: "Invalid user ID",
+        success: false,
         messageType: "failure",
+        message: "Invalid user ID",
+        data: null
       });
     }
 
-    const pastOrders = await Order.find({
-      customerId: userId,
-      orderStatus: {
-        $in: ["completed", "cancelled_by_customer", "rejected_by_restaurant"],
-      },
-    })
-      .sort({ orderTime: -1 })
-      .populate("restaurantId", "name images")
-      .populate("orderItems.productId", "name images price");
+    const pastOrders = await Order.find({ customerId: userId })
+      .populate({
+        path: "restaurantId",
+        select: "name location address"
+      })
+      .sort({ createdAt: -1 })
+      .lean();
 
     if (!pastOrders || pastOrders.length === 0) {
-      return res.json({
-        success: "1",
+      return res.status(404).json({
+        success: false,
+        messageType: "failure",
         message: "No past orders found",
-        messageType: "success",
-        count: "0",
-        orders: [],
+        data: null
       });
     }
 
-    // Get unique restaurant IDs
-    const restaurantIds = [
-      ...new Set(pastOrders.map((order) => order.restaurantId._id.toString())),
-    ];
+    // Format response
+    const formattedOrders = pastOrders.map(order => ({
+      orderId: order._id,
+      restaurant: {
+        name: order.restaurantId?.name || "N/A",
+        address: order.restaurantId?.address || "N/A",
+        location: order.restaurantId?.location?.coordinates || []
+      },
+      orderDate: order.orderTime,
+      orderTime: order.orderTime,
+      orderStatus: order.orderStatus,
+      orderItems: order.orderItems.map(item => ({
+        productId: item.productId,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        totalPrice: item.totalPrice,
+        image: item.image
+      })),
+      totalAmount: order.totalAmount
+    }));
 
-    const availabilityPromises = restaurantIds.map((restaurantId) =>
-      restaurantService.checkStatus(restaurantId)
-    );
-    const availabilityResults = await Promise.all(availabilityPromises);
-
-    const restaurantAvailability = {};
-    restaurantIds.forEach((id, index) => {
-      restaurantAvailability[id] = availabilityResults[index];
-    });
-
-    const formattedOrders = await Promise.all(
-      pastOrders.map(async (order) => {
-        const availability =
-          restaurantAvailability[order.restaurantId._id.toString()] || {};
-        const deliveryAddress = order.deliveryAddress || {};
-
-        const itemsWithAvailability = await Promise.all(
-          order.orderItems.map(async (item) => {
-            const productAvailability =
-              await productService.checkProductAvailability(
-                item.productId?._id
-              );
-            console.log(item.productId);
-            return {
-              productId: item.productId?._id
-                ? item.productId._id.toString()
-                : "null",
-              name: item.productId?.name ? String(item.productId.name) : "null",
-              image: item.productId?.images[0]
-                ? String(item.productId.images[0])
-                : "null",
-              quantity: item.quantity ? String(item.quantity) : "0",
-              price: item.price ? String(item.price) : "0",
-              isAvailableNow: productAvailability.isAvailable ? "1" : "0",
-              unavailableReason: productAvailability.reason || null,
-            };
-          })
-        );
-
-        return {
-          orderId: order._id.toString(),
-          restaurant: {
-            id: order.restaurantId._id.toString(),
-            name: order.restaurantId.name
-              ? String(order.restaurantId.name)
-              : "null",
-            image: order.restaurantId.images
-              ? String(order.restaurantId.images)
-              : "null",
-            isAvailable: availability.isAvailable ? "1" : "0",
-            nonAvailabilityReason: availability.reason || null, // <-- corrected line
-            nextOpeningTime: availability.nextOpeningTime || null,
-          },
-          orderTime: order.orderTime ? order.orderTime.toISOString() : "null",
-          deliveryTime: order.deliveryTime
-            ? order.deliveryTime.toISOString()
-            : "18 mins",
-          status: order.orderStatus ? String(order.orderStatus) : "null",
-          cancellationReason: order.cancellationReason
-            ? String(order.cancellationReason)
-            : "null",
-          items: itemsWithAvailability,
-          totalAmount: order.totalAmount ? String(order.totalAmount) : "0",
-          deliveryCharge: order.deliveryCharge
-            ? String(order.deliveryCharge)
-            : "0",
-        };
-      })
-    );
-
-    res.json({
-      success: "1",
-      message: "Past orders retrieved successfully",
+    return res.status(200).json({
+      success: true,
       messageType: "success",
-      count: pastOrders.length.toString(),
-      orders: formattedOrders,
+      message: "Past orders fetched successfully",
+      data: {
+        orders: formattedOrders
+      }
     });
-  } catch (error) {
-    console.error("Error fetching past orders:", error);
+
+  } catch (err) {
+    console.error("Error fetching past orders:", err);
     res.status(500).json({
-      success: "0",
-      message: "Internal server error",
+      success: false,
       messageType: "failure",
+      message: "Server error while fetching past orders",
+      data: null
     });
   }
 };
+
+
+
+
+
+
+
+// Get user's past delivered and canceled orders
+
+// exports.getPastOrders = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+
+//     if (!mongoose.Types.ObjectId.isValid(userId)) {
+//       return res.status(400).json({
+//         success: "0",
+//         message: "Invalid user ID",
+//         messageType: "failure",
+//       });
+//     }
+
+//     const pastOrders = await Order.find({
+//       customerId: userId,
+//       orderStatus: {
+//         $in: ["completed", "cancelled_by_customer", "rejected_by_restaurant"],
+//       },
+//     })
+//       .sort({ orderTime: -1 })
+//       .populate("restaurantId", "name images")
+//       .populate("orderItems.productId", "name images price");
+
+//     if (!pastOrders || pastOrders.length === 0) {
+//       return res.json({
+//         success: "1",
+//         message: "No past orders found",
+//         messageType: "success",
+//         count: "0",
+//         orders: [],
+//       });
+//     }
+
+//     // Get unique restaurant IDs
+//     const restaurantIds = [
+//       ...new Set(pastOrders.map((order) => order.restaurantId._id.toString())),
+//     ];
+
+//     const availabilityPromises = restaurantIds.map((restaurantId) =>
+//       restaurantService.checkStatus(restaurantId)
+//     );
+//     const availabilityResults = await Promise.all(availabilityPromises);
+
+//     const restaurantAvailability = {};
+//     restaurantIds.forEach((id, index) => {
+//       restaurantAvailability[id] = availabilityResults[index];
+//     });
+
+//     const formattedOrders = await Promise.all(
+//       pastOrders.map(async (order) => {
+//         const availability =
+//           restaurantAvailability[order.restaurantId._id.toString()] || {};
+//         const deliveryAddress = order.deliveryAddress || {};
+
+//         const itemsWithAvailability = await Promise.all(
+//           order.orderItems.map(async (item) => {
+//             const productAvailability =
+//               await productService.checkProductAvailability(
+//                 item.productId?._id
+//               );
+//             console.log(item.productId);
+//             return {
+//               productId: item.productId?._id
+//                 ? item.productId._id.toString()
+//                 : "null",
+//               name: item.productId?.name ? String(item.productId.name) : "null",
+//               image: item.productId?.images[0]
+//                 ? String(item.productId.images[0])
+//                 : "null",
+//               quantity: item.quantity ? String(item.quantity) : "0",
+//               price: item.price ? String(item.price) : "0",
+//               isAvailableNow: productAvailability.isAvailable ? "1" : "0",
+//               unavailableReason: productAvailability.reason || null,
+//             };
+//           })
+//         );
+
+//         return {
+//           orderId: order._id.toString(),
+//           restaurant: {
+//             id: order.restaurantId._id.toString(),
+//             name: order.restaurantId.name
+//               ? String(order.restaurantId.name)
+//               : "null",
+//             image: order.restaurantId.images
+//               ? String(order.restaurantId.images)
+//               : "null",
+//             isAvailable: availability.isAvailable ? "1" : "0",
+//             nonAvailabilityReason: availability.reason || null, // <-- corrected line
+//             nextOpeningTime: availability.nextOpeningTime || null,
+//           },
+//           orderTime: order.orderTime ? order.orderTime.toISOString() : "null",
+//           deliveryTime: order.deliveryTime
+//             ? order.deliveryTime.toISOString()
+//             : "18 mins",
+//           status: order.orderStatus ? String(order.orderStatus) : "null",
+//           cancellationReason: order.cancellationReason
+//             ? String(order.cancellationReason)
+//             : "null",
+//           items: itemsWithAvailability,
+//           totalAmount: order.totalAmount ? String(order.totalAmount) : "0",
+//           deliveryCharge: order.deliveryCharge
+//             ? String(order.deliveryCharge)
+//             : "0",
+//         };
+//       })
+//     );
+
+//     res.json({
+//       success: "1",
+//       message: "Past orders retrieved successfully",
+//       messageType: "success",
+//       count: pastOrders.length.toString(),
+//       orders: formattedOrders,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching past orders:", error);
+//     res.status(500).json({
+//       success: "0",
+//       message: "Internal server error",
+//       messageType: "failure",
+//     });
+//   }
+// };
 
 
 
@@ -1538,6 +1615,7 @@ exports.placeOrderWithAddressId = async (req, res) => {
       } else {
         console.log(`✅ Agent ${assignmentResult.agent.fullName} assigned`);
       }
+       await Cart.findByIdAndDelete(cartId);
 
     } catch (error) {
       console.error("❌ Error during agent assignment:", error);
@@ -1617,6 +1695,10 @@ exports.verifyPayment = async (req, res) => {
       verificationStatus: "verified",
     };
     await order.save();
+
+  if (order.cartId) {
+  await Cart.findByIdAndDelete(order.cartId);
+}
 
     // 4️⃣ Trigger task allocation after payment verification
     const allocationResult = await assignTask(orderId);
