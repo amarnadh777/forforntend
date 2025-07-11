@@ -985,7 +985,7 @@ exports.getPastOrders = async (req, res) => {
       return res.status(400).json({
         success: false,
         messageType: "failure",
-        message: "Invalid user ID",
+        message: "Invalid user ID.",
         data: null
       });
     }
@@ -1002,48 +1002,64 @@ exports.getPastOrders = async (req, res) => {
       return res.status(404).json({
         success: false,
         messageType: "failure",
-        message: "No past orders found",
+        message: "No past orders found.",
         data: null
       });
     }
 
     // Format response
-    const formattedOrders = pastOrders.map(order => ({
-      orderId: order._id,
-      restaurant: {
-        name: order.restaurantId?.name || "N/A",
-        address: order.restaurantId?.address || "N/A",
-        location: order.restaurantId?.location?.coordinates || []
-      },
-      orderDate: order.orderTime,
-      orderTime: order.orderTime,
-      orderStatus: order.orderStatus,
-      orderItems: order.orderItems.map(item => ({
-        productId: item.productId,
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price,
-        totalPrice: item.totalPrice,
-        image: item.image
-      })),
-      totalAmount: order.totalAmount
-    }));
+    const formattedOrders = pastOrders.map(order => {
+      // Optional: format full address into a string if needed
+      const addressObj = order.restaurantId?.address;
+      const fullAddress = addressObj
+        ? [
+            addressObj.street,
+            addressObj.area,
+            addressObj.city,
+            addressObj.state,
+            addressObj.pincode,
+            addressObj.country
+          ]
+            .filter(Boolean)
+            .join(", ")
+        : "N/A";
+
+      return {
+        orderId: order._id,
+        restaurant: {
+          name: order.restaurantId?.name || "N/A",
+          address: fullAddress,
+          location: order.restaurantId?.location?.coordinates || []
+        },
+        orderDate: order.orderTime,
+        orderTime: order.orderTime,
+        orderStatus: order.orderStatus,
+        orderItems: order.orderItems.map(item => ({
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          totalPrice: item.totalPrice,
+          image: item.image
+        })),
+        totalAmount: order.totalAmount
+      };
+    });
 
     return res.status(200).json({
       success: true,
       messageType: "success",
-      message: "Past orders fetched successfully",
+      message: "Past orders fetched successfully.",
       data: {
         orders: formattedOrders
       }
     });
-
   } catch (err) {
     console.error("Error fetching past orders:", err);
     res.status(500).json({
       success: false,
       messageType: "failure",
-      message: "Server error while fetching past orders",
+      message: "Server error while fetching past orders.",
       data: null
     });
   }
