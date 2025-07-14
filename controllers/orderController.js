@@ -1004,15 +1004,15 @@ exports.getPastOrders = async (req, res) => {
       .lean();
 
     if (!pastOrders || pastOrders.length === 0) {
-  return res.status(200).json({
-    success: true,
-    messageType: "success",
-    message: "No past orders found.",
-    data: {
-      orders: []
+      return res.status(200).json({
+        success: true,
+        messageType: "success",
+        message: "No past orders found.",
+        data: {
+          orders: []
+        }
+      });
     }
-  });
-}
 
     // Format response
     const formattedOrders = pastOrders.map(order => {
@@ -1028,13 +1028,13 @@ exports.getPastOrders = async (req, res) => {
           ].filter(Boolean).join(", ")
         : "N/A";
 
-      // Map status for frontend
-      let displayStatus = '';
-      if (order.orderStatus === 'delivered') {
-        displayStatus = 'Delivered';
-      } else if (order.orderStatus === 'cancelled_by_customer') {
-        displayStatus = 'Cancelled';
-      }
+      // Map status for frontend numeric value
+      let displayStatus = null;
+  if (order.orderStatus === 'delivered') {
+    displayStatus = "1";
+  } else if (order.orderStatus === 'cancelled_by_customer') {
+    displayStatus = "0";
+  }
 
       return {
         orderId: order._id,
@@ -1045,7 +1045,7 @@ exports.getPastOrders = async (req, res) => {
         },
         orderDate: order.orderTime,
         orderTime: order.orderTime,
-        orderStatus: displayStatus,   // 👈 mapped status here
+        orderStatus: displayStatus,   // 👈 numeric value here
         orderItems: order.orderItems.map(item => ({
           productId: item.productId,
           name: item.name,
@@ -1066,6 +1066,7 @@ exports.getPastOrders = async (req, res) => {
         orders: formattedOrders
       }
     });
+
   } catch (err) {
     console.error("Error fetching past orders:", err);
     res.status(500).json({
@@ -1076,7 +1077,6 @@ exports.getPastOrders = async (req, res) => {
     });
   }
 };
-
 
 
 
