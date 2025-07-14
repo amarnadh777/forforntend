@@ -990,7 +990,11 @@ exports.getPastOrders = async (req, res) => {
       });
     }
 
-    const pastOrders = await Order.find({ customerId: userId })
+    // Fetch delivered and cancelled orders only
+    const pastOrders = await Order.find({
+      customerId: userId,
+      orderStatus: { $in: ['delivered', 'cancelled_by_customer'] }
+    })
       .populate({
         path: "restaurantId",
         select: "name location address"
@@ -1009,7 +1013,6 @@ exports.getPastOrders = async (req, res) => {
 
     // Format response
     const formattedOrders = pastOrders.map(order => {
-      // Optional: format full address into a string if needed
       const addressObj = order.restaurantId?.address;
       const fullAddress = addressObj
         ? [
@@ -1019,10 +1022,16 @@ exports.getPastOrders = async (req, res) => {
             addressObj.state,
             addressObj.pincode,
             addressObj.country
-          ]
-            .filter(Boolean)
-            .join(", ")
+          ].filter(Boolean).join(", ")
         : "N/A";
+
+      // Map status for frontend
+      let displayStatus = '';
+      if (order.orderStatus === 'delivered') {
+        displayStatus = 'Delivered';
+      } else if (order.orderStatus === 'cancelled_by_customer') {
+        displayStatus = 'Cancelled';
+      }
 
       return {
         orderId: order._id,
@@ -1033,7 +1042,7 @@ exports.getPastOrders = async (req, res) => {
         },
         orderDate: order.orderTime,
         orderTime: order.orderTime,
-        orderStatus: order.orderStatus,
+        orderStatus: displayStatus,   // 👈 mapped status here
         orderItems: order.orderItems.map(item => ({
           productId: item.productId,
           name: item.name,
@@ -1064,7 +1073,6 @@ exports.getPastOrders = async (req, res) => {
     });
   }
 };
-
 
 
 
