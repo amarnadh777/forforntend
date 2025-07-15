@@ -59,9 +59,9 @@ exports.addToCart = async (req, res) => {
           cart.products.push({
             productId: prod.productId,
             name: productData.name,
-            description: productData.description,  // added
-            images: productData.images,            // added
-            foodType: productData.foodType,        // added
+            description: productData.description,
+            images: productData.images,
+            foodType: productData.foodType,
             price,
             quantity: newQty,
             total: price * newQty
@@ -70,10 +70,27 @@ exports.addToCart = async (req, res) => {
       }
     }
 
+    // If cart is empty after processing, cleanly return empty cart
     if (cart.products.length === 0) {
-      return res.status(400).json({ message: "No valid products found to add to cart", messageType: "failure" });
+      cart.totalPrice = 0;
+      await cart.save();
+
+      return res.status(200).json({
+        message: "Cart is now empty",
+        messageType: "success",
+        data: {
+          cartId: cart._id.toString(),
+          userId: cart.user.toString(),
+          restaurantId: cart.restaurantId,
+          products: [],
+          totalPrice: 0,
+          createdAt: cart.createdAt,
+          updatedAt: cart.updatedAt,
+        }
+      });
     }
 
+    // Otherwise, calculate totals and save
     cart.totalPrice = cart.products.reduce((sum, p) => sum + p.total, 0);
     await cart.save();
 
