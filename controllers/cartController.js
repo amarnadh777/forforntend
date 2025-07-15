@@ -39,38 +39,41 @@ exports.addToCart = async (req, res) => {
     for (const prod of products) {
       if (!prod.productId || !mongoose.Types.ObjectId.isValid(prod.productId)) continue;
 
-      const productData = await Product.findById(prod.productId);
-      if (!productData || productData.restaurantId.toString() !== restaurantId) continue;
-
       const index = cart.products.findIndex(p => p.productId.toString() === prod.productId);
 
       if (prod.quantity === 0) {
+        // Always remove from cart, even if product no longer exists in DB
         if (index > -1) cart.products.splice(index, 1);
-      } else {
-        const newQty = prod.quantity > 0 ? prod.quantity : 1;
-        const price = productData.price;
+        continue; // skip adding
+      }
 
-        if (index > -1) {
-          // update existing product
-          cart.products[index].quantity = newQty;
-          cart.products[index].total = newQty * price;
-        } else {
-          // add new product with extended info
-          cart.products.push({
-            productId: prod.productId,
-            name: productData.name,
-            description: productData.description,
-            images: productData.images,
-            foodType: productData.foodType,
-            price,
-            quantity: newQty,
-            total: price * newQty
-          });
-        }
+      // Otherwise proceed to check and add/update
+      const productData = await Product.findById(prod.productId);
+      if (!productData || productData.restaurantId.toString() !== restaurantId) continue;
+
+      const newQty = prod.quantity > 0 ? prod.quantity : 1;
+      const price = productData.price;
+
+      if (index > -1) {
+        // update existing product
+        cart.products[index].quantity = newQty;
+        cart.products[index].total = newQty * price;
+      } else {
+        // add new product
+        cart.products.push({
+          productId: prod.productId,
+          name: productData.name,
+          description: productData.description,
+          images: productData.images,
+          foodType: productData.foodType,
+          price,
+          quantity: newQty,
+          total: price * newQty
+        });
       }
     }
 
-    // If cart is empty after processing, cleanly return empty cart
+    // If cart is empty after processing, return empty cart
     if (cart.products.length === 0) {
       cart.totalPrice = 0;
       await cart.save();
@@ -94,17 +97,14 @@ exports.addToCart = async (req, res) => {
     cart.totalPrice = cart.products.reduce((sum, p) => sum + p.total, 0);
     await cart.save();
 
-    // Prepare response data
-    const cartObj = cart.toObject();
-
     const cartData = {
-      cartId: cartObj._id.toString(),
-      userId: cartObj.user.toString(),
-      restaurantId: cartObj.restaurantId,
-      products: cartObj.products,
-      totalPrice: cartObj.totalPrice,
-      createdAt: cartObj.createdAt,
-      updatedAt: cartObj.updatedAt,
+      cartId: cart._id.toString(),
+      userId: cart.user.toString(),
+      restaurantId: cart.restaurantId,
+      products: cart.products,
+      totalPrice: cart.totalPrice,
+      createdAt: cart.createdAt,
+      updatedAt: cart.updatedAt,
     };
 
     return res.status(200).json({
