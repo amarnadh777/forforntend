@@ -4,7 +4,6 @@ const { calculateOrderCost } = require("../services/orderCostCalculator");
 
 const mongoose = require('mongoose')
 
-
 exports.addToCart = async (req, res) => {
   const userId = req.user._id;
   const { restaurantId, products } = req.body;
@@ -21,7 +20,7 @@ exports.addToCart = async (req, res) => {
       return res.status(400).json({ message: "Products must be a non-empty array", messageType: "failure" });
     }
 
-    // Check for existing cart
+    // Get existing cart or create
     let cart = await Cart.findOne({ user: userId });
 
     if (!cart) {
@@ -31,23 +30,25 @@ exports.addToCart = async (req, res) => {
         products: []
       });
     } else if (cart.restaurantId.toString() !== restaurantId) {
+      // Reset cart for new restaurant
       cart.products = [];
       cart.restaurantId = restaurantId;
     }
 
-    // Process products
+    // Process each product
     for (const prod of products) {
       if (!prod.productId || !mongoose.Types.ObjectId.isValid(prod.productId)) continue;
 
+      // Try to find index of this product in the cart
       const index = cart.products.findIndex(p => p.productId.toString() === prod.productId);
 
       if (prod.quantity === 0) {
-        // Always remove from cart, even if product no longer exists in DB
+        // Remove from cart
         if (index > -1) cart.products.splice(index, 1);
-        continue; // skip adding
+        continue;
       }
 
-      // Otherwise proceed to check and add/update
+      // If adding/updating, must check DB
       const productData = await Product.findById(prod.productId);
       if (!productData || productData.restaurantId.toString() !== restaurantId) continue;
 
@@ -55,11 +56,11 @@ exports.addToCart = async (req, res) => {
       const price = productData.price;
 
       if (index > -1) {
-        // update existing product
+        // update existing
         cart.products[index].quantity = newQty;
         cart.products[index].total = newQty * price;
       } else {
-        // add new product
+        // add new
         cart.products.push({
           productId: prod.productId,
           name: productData.name,
@@ -73,7 +74,7 @@ exports.addToCart = async (req, res) => {
       }
     }
 
-    // If cart is empty after processing, return empty cart
+    // Handle empty cart
     if (cart.products.length === 0) {
       cart.totalPrice = 0;
       await cart.save();
@@ -93,7 +94,7 @@ exports.addToCart = async (req, res) => {
       });
     }
 
-    // Otherwise, calculate totals and save
+    // Otherwise compute total
     cart.totalPrice = cart.products.reduce((sum, p) => sum + p.total, 0);
     await cart.save();
 

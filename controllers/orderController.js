@@ -1816,9 +1816,9 @@ exports.getActiveOrder = async (req, res) => {
       orderStatus: activeOrder.orderStatus,
       assignedAgent: activeOrder.assignedAgent
         ? {
-            _id: activeOrder.assignedAgent._id,
-            name: activeOrder.assignedAgent.name,
-            phone: activeOrder.assignedAgent.phone
+            id: activeOrder.assignedAgent._id,
+            fullName: activeOrder.assignedAgent.fullName,
+            phoneNumber: activeOrder.assignedAgent.phoneNumber
           }
         : null,
       isAgentAssigned: activeOrder.assignedAgent ? 1 : 0,

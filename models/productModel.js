@@ -65,6 +65,28 @@ const product = new mongoose.Schema({
     type: String,
     default: 'piece'
   },
+
+
+
+specialOffer: {
+  type: {
+    type: String,
+    enum: ['flat', 'percentage'],
+    default: 'flat'
+  },
+  discount: {
+    type: Number,
+    default: 0
+  },
+  maxDiscount: {
+    type: Number
+  },
+  startDate: Date,
+  endDate: Date
+},
+
+
+
   stock: {
     type: Number,
     default: 0
