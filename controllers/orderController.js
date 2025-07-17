@@ -1553,18 +1553,49 @@ exports.placeOrderWithAddressId = async (req, res) => {
       quantity: item.quantity,
     }));
 
-    const bill = calculateOrderCostV2({
-      cartProducts,
-      tipAmount,
-      couponCode,
-      restaurantCoords: { latitude: restaurantLatitude, longitude: restaurantLongitude },
-      userCoords: { latitude: userLatitude, longitude: userLongitude },
-      offers: await Offer.find({ _id: { $in: restaurant.offers }, active: true }),
-      revenueShare: restaurant.commission,
-      taxRate: 5,
-      isSurge: restaurant.isSurge || false,
-    });
 
+
+
+
+
+
+
+
+
+    // Before calculating bill
+const preSurgeOrderAmount = cart.products.reduce(
+  (total, item) => total + item.price * item.quantity,
+  0
+);
+const userCoords = [userLongitude, userLatitude];
+const restaurantCoords = [restaurantLongitude, restaurantLatitude];
+
+const surgeObj = await getApplicableSurgeFee(userCoords, preSurgeOrderAmount);
+const isSurge = !!surgeObj;
+const surgeFeeAmount = surgeObj ? surgeObj.fee : 0;
+
+const deliveryFee = await feeService.calculateDeliveryFee(restaurantCoords, userCoords);
+const offers = await Offer.find({
+  applicableRestaurants: restaurant._id,
+  isActive: true,
+  validFrom: { $lte: new Date() },
+  validTill: { $gte: new Date() },
+}).lean();
+const foodTax = await feeService.getActiveTaxes("food");
+
+ const bill = calculateOrderCostV2({
+  cartProducts,
+  tipAmount,
+  couponCode,
+  restaurantCoords: { latitude: restaurantLatitude, longitude: restaurantLongitude },
+  userCoords: { latitude: userLatitude, longitude: userLongitude },
+  deliveryFee,
+  offers,
+  revenueShare: restaurant.commission,
+  taxes: foodTax,
+  isSurge,
+  surgeFeeAmount,
+});
     // Check permission
     let orderStatus = "pending";
     const permission = await Permission.findOne({ restaurantId: restaurant._id });
