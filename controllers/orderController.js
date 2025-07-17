@@ -1773,7 +1773,7 @@ exports.verifyPayment = async (req, res) => {
     agentName: allocationResult.agent ? allocationResult.agent.fullName : null,
     reason: allocationResult.reason || allocationResult.error || null,
   },
-  nextSteps: paymentMethod === "online"
+  nextSteps: order.paymentMethod === "online"
     ? "Order is now being processed, agent will be assigned shortly."
     : "Awaiting agent assignment.",
 })
