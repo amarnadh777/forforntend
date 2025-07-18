@@ -158,6 +158,12 @@ const userSchema = new mongoose.Schema(
       },
     ],
 
+    forgotPasswordOtpVerified: {
+  type: Boolean,
+  default: false,
+},
+
+
     deviceTokens: [String],
     lastActivity: Date,
 

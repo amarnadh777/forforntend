@@ -1763,7 +1763,7 @@ exports.verifyPayment = async (req, res) => {
     console.log("🚚 Allocation Result after payment:", allocationResult);
 
    return res.status(200).json({
-  message: "✅ Payment verified and order confirmed.",
+  message: "Payment verified and order confirmed.",
   messageType: "success",
   orderId: order._id,
   paymentStatus: order.paymentStatus,
