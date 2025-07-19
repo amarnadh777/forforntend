@@ -42,6 +42,7 @@ exports.getNearbyRestaurants = async (req, res) => {
         },
       },
       active: true,
+      storeType:"restaurant"
     }).select("name location images");
 
     if (restaurants.length === 0) {
@@ -196,6 +197,7 @@ exports.getNearbyCategories = async (req, res) => {
         },
       },
       active: true,
+      storeType:"restaurant"
     }).select("_id");
 
     const restaurantIds = nearbyRestaurants.map(r => r._id);
@@ -417,10 +419,12 @@ exports.getRecommendedRestaurants = async (req, res) => {
             coordinates: [lng, lat],
           },
           $maxDistance: dist,
+          
         },
       },
       minOrderAmount: { $gte: minOrder },
       active: true,
+        storeType:"restaurant"
     })
       .sort({ rating: -1 })
       .limit(20);
