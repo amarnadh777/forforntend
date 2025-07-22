@@ -302,16 +302,17 @@ exports.getCart = async (req, res) => {
       });
     }
 
-    const products = cart.products.map(item => ({
-      productId: item.productId,
-      name: item.name,
-      description: item.description,
-      images: item.images,
-      foodType: item.foodType,
-      price: item.price,
-      quantity: item.quantity,
-      total: item.total
-    }));
+ const products = cart.products.map(item => ({
+  productId: item.productId,
+  name: item.name,
+  description: item.description,
+  images: item.images,
+  foodType: item.foodType,
+  price: item.price,
+  quantity: item.quantity,
+  total: item.total,
+  restaurantId: cart.restaurantId // Add restaurantId to each product
+}));
 
     const cartData = {
       cartId: cart._id.toString(),
