@@ -311,7 +311,6 @@ exports.getCart = async (req, res) => {
   price: item.price,
   quantity: item.quantity,
   total: item.total,
-  restaurantId: cart.restaurantId // Add restaurantId to each product
 }));
 
     const cartData = {
