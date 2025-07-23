@@ -838,7 +838,7 @@ exports.getOrderPriceSummary = async (req, res) => {
 
     const foodTax = await feeService.getActiveTaxes("food");
 
-    const costSummary = await calculateOrderCostV2({
+    const costSummary = calculateOrderCostV2({
       cartProducts: cart.products,
       tipAmount,
       couponCode,
@@ -858,9 +858,8 @@ exports.getOrderPriceSummary = async (req, res) => {
       turf.point(restaurantCoords),
       { units: "kilometers" }
     );
-
-    const isOffer = costSummary?.offersApplied?.length > 0 ? "1" : "0";
-
+     const isOffer = costSummary.offersApplied.length > 0 ? "1" : "0";
+    // ✅ Convert all values to string or 1/0 for booleans for Flutter-friendly format
     const summary = {
       deliveryFee: costSummary.deliveryFee.toFixed(2),
       discount: costSummary.offerDiscount.toFixed(2),
@@ -868,55 +867,26 @@ exports.getOrderPriceSummary = async (req, res) => {
       subtotal: costSummary.cartTotal.toFixed(2),
       tax: costSummary.totalTaxAmount.toFixed(2),
       totalTaxAmount: costSummary.totalTaxAmount.toFixed(2),
-      tipAmount: costSummary.tipAmount.toFixed(2),
       surgeFee: costSummary.surgeFee.toFixed(2),
       total: costSummary.finalAmount.toFixed(2),
+      tipAmount: costSummary.tipAmount.toFixed(2),
       isSurge: isSurge ? "1" : "0",
       surgeReason: surgeObj ? surgeObj.reason : "",
       offersApplied: costSummary.offersApplied.length
         ? costSummary.offersApplied.join(", ")
         : "",
-      isOffer: isOffer,
-
-      taxes: costSummary.taxBreakdown.map(tax => ({
+      isOffer: isOffer, 
+      taxes: costSummary.taxBreakdown.map((tax) => ({
         name: tax.name,
-        level: tax.level,
-        type: tax.type,
-        rate: tax.rate,
-        amount: tax.amount.toFixed(2)
+        percentage: tax.percentage.toFixed(2),
+        amount: tax.amount.toFixed(2),
       })),
-
-      packingCharges: [
-        ...costSummary.packingCharges.marketplace,
-        ...costSummary.packingCharges.merchant
-      ].map(p => ({
-        name: p.name,
-        level: p.level,
-        type: p.type,
-        rate: p.rate,
-        amount: p.amount.toFixed(2),
-        description: p.description
-      })),
-
-      additionalCharges: [
-        ...costSummary.additionalCharges.marketplace,
-        ...costSummary.additionalCharges.merchant
-      ].map(c => ({
-        name: c.name,
-        level: c.level,
-        type: c.type,
-        rate: c.rate,
-        amount: c.amount.toFixed(2)
-      })),
-
-      totalPackingCharge: costSummary.totalPackingCharge.toFixed(2),
-      totalAdditionalCharges: costSummary.totalAdditionalCharges.toFixed(2)
     };
 
     return res.status(200).json({
       message: "Bill summary calculated successfully",
       messageType: "success",
-      data: summary
+      data: summary,
     });
   } catch (err) {
     console.error(err);
@@ -926,7 +896,6 @@ exports.getOrderPriceSummary = async (req, res) => {
     });
   }
 };
-
 
 exports.getOrderPriceSummaryByaddressId = async (req, res) => {
   try {
@@ -984,7 +953,7 @@ exports.getOrderPriceSummaryByaddressId = async (req, res) => {
     // Use coordinates from the address
     const userCoords = address.location.coordinates; // [longitude, latitude]
 
-    const costSummary = calculateOrderCostv2({
+    const costSummary = calculateOrderCost({
       cartProducts: cart.products,
       restaurant,
       userCoords,
