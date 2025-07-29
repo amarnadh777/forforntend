@@ -850,7 +850,6 @@ exports.getOrderPriceSummary = async (req, res) => {
       taxes: foodTax,
       isSurge,
       surgeFeeAmount,
-      merchantId: restaurant._id
     });
 
     const distanceKm = turf.distance(
